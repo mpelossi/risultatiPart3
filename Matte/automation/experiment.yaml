@@ -5,7 +5,7 @@
   "kops_state_store": "gs://cca-eth-2026-group-54-mpelossi",
   "ssh_key_path": "~/.ssh/cloud-computing",
   "ssh_user": "ubuntu",
-  "cluster_config_path": "../part3.yaml",
+  "cluster_config_path": "part3.yaml",
   "results_root": "runs",
   "submission_group": "054",
   "memcached_name": "some-memcached",

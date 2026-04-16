@@ -1,0 +1,324 @@
+apiVersion: kops.k8s.io/v1alpha2
+kind: Cluster
+metadata:
+  creationTimestamp: null
+  name: part3.k8s.local
+spec:
+  api:
+    loadBalancer:
+      type: Public
+  authorization:
+    rbac: {}
+  channel: stable
+  cloudConfig:
+    gceServiceAccount: default
+  cloudProvider: gce
+  configBase: gs://cca-eth-2026-group-54-mpelossi/part3.k8s.local
+  containerRuntime: containerd
+  etcdClusters:
+  - cpuRequest: 200m
+    etcdMembers:
+    - instanceGroup: master-europe-west1-b
+      name: a
+    memoryRequest: 100Mi
+    name: main
+  - cpuRequest: 100m
+    etcdMembers:
+    - instanceGroup: master-europe-west1-b
+      name: a
+    memoryRequest: 100Mi
+    name: events
+  iam:
+    allowContainerRegistry: true
+    legacy: false
+  kubelet:
+    anonymousAuth: false
+  kubernetesApiAccess:
+  - 0.0.0.0/0
+  kubernetesVersion: 1.31.5
+  masterPublicName: api.part3.k8s.local
+  networking:
+    kubenet: {}
+  nonMasqueradeCIDR: 100.64.0.0/10
+  project: cca-eth-2026-group-54
+  sshAccess:
+  - 0.0.0.0/0
+  subnets:
+  - name: europe-west1
+    region: europe-west1
+    type: Public
+  topology:
+    dns:
+      type: None
+    masters: public
+    nodes: public
+  cloudControllerManager:
+    image: gcr.io/k8s-staging-cloud-provider-gcp/cloud-controller-manager:master@sha256:e125f4e6792978125546e64279a13de18fdf6b704edfec8400cac1254d3adf88
+
+---
+
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: part3.k8s.local
+  name: master-europe-west1-b
+spec:
+  image: ubuntu-os-cloud/ubuntu-2404-noble-amd64-v20250130
+  machineType: e2-standard-2
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    cloud.google.com/metadata-proxy-ready: "true"
+    kops.k8s.io/instancegroup: master-europe-west1-b
+  role: Master
+  subnets:
+  - europe-west1
+  zones:
+  - europe-west1-b
+
+---
+
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: part3.k8s.local
+  name: client-measure
+spec:
+  additionalUserData:
+  - name: 00-client-measure-bootstrap.sh
+    type: text/x-shellscript
+    content: |
+      #!/bin/bash
+      mkdir -p /opt/cca
+      exec > >(tee -a /var/log/cca-bootstrap.log | logger -t cca-bootstrap -s) 2>&1
+      set -euxo pipefail
+
+      if [[ -f /opt/cca/bootstrap.done ]]; then
+        echo "Bootstrap already completed"
+        exit 0
+      fi
+
+      export DEBIAN_FRONTEND=noninteractive
+      if ! grep -q 'deb-src' /etc/apt/sources.list.d/ubuntu.sources; then
+        sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+      fi
+      apt-get update
+      apt-get install libevent-dev libzmq3-dev git make g++ --yes
+      apt-get build-dep memcached --yes
+
+      if [[ ! -d /opt/cca/memcache-perf-dynamic/.git ]]; then
+        rm -rf /opt/cca/memcache-perf-dynamic
+        git clone https://github.com/eth-easl/memcache-perf-dynamic.git /opt/cca/memcache-perf-dynamic
+      fi
+      make -C /opt/cca/memcache-perf-dynamic
+      touch /opt/cca/bootstrap.done
+  image: ubuntu-os-cloud/ubuntu-2404-noble-amd64-v20250130
+  machineType: e2-standard-2
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    cloud.google.com/metadata-proxy-ready: "true"
+    kops.k8s.io/instancegroup: nodes-europe-west1-b
+    cca-project-nodetype: "client-measure"
+  role: Node
+  subnets:
+  - europe-west1
+  zones:
+  - europe-west1-b
+---
+
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: part3.k8s.local
+  name: client-agent-a
+spec:
+  additionalUserData:
+  - name: 00-client-agent-a-bootstrap.sh
+    type: text/x-shellscript
+    content: |
+      #!/bin/bash
+      mkdir -p /opt/cca
+      exec > >(tee -a /var/log/cca-bootstrap.log | logger -t cca-bootstrap -s) 2>&1
+      set -euxo pipefail
+
+      if [[ -f /opt/cca/bootstrap.done ]]; then
+        echo "Bootstrap already completed"
+        exit 0
+      fi
+
+      export DEBIAN_FRONTEND=noninteractive
+      if ! grep -q 'deb-src' /etc/apt/sources.list.d/ubuntu.sources; then
+        sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+      fi
+      apt-get update
+      apt-get install libevent-dev libzmq3-dev git make g++ --yes
+      apt-get build-dep memcached --yes
+
+      if [[ ! -d /opt/cca/memcache-perf-dynamic/.git ]]; then
+        rm -rf /opt/cca/memcache-perf-dynamic
+        git clone https://github.com/eth-easl/memcache-perf-dynamic.git /opt/cca/memcache-perf-dynamic
+      fi
+      make -C /opt/cca/memcache-perf-dynamic
+
+      cat >/etc/systemd/system/mcperf-agent.service <<'EOF'
+      [Unit]
+      Description=CCA mcperf load agent
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      WorkingDirectory=/opt/cca/memcache-perf-dynamic
+      ExecStart=/opt/cca/memcache-perf-dynamic/mcperf -T 2 -A
+      Restart=always
+      RestartSec=2
+      StandardOutput=append:/var/log/mcperf-agent.log
+      StandardError=append:/var/log/mcperf-agent.log
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      systemctl daemon-reload
+      systemctl enable --now mcperf-agent.service
+      touch /opt/cca/bootstrap.done
+  image: ubuntu-os-cloud/ubuntu-2404-noble-amd64-v20250130
+  machineType: e2-standard-2
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    cloud.google.com/metadata-proxy-ready: "true"
+    kops.k8s.io/instancegroup: nodes-europe-west1-b
+    cca-project-nodetype: "client-agent-a"
+  role: Node
+  subnets:
+  - europe-west1
+  zones:
+  - europe-west1-b
+
+---
+
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: part3.k8s.local
+  name: client-agent-b
+spec:
+  additionalUserData:
+  - name: 00-client-agent-b-bootstrap.sh
+    type: text/x-shellscript
+    content: |
+      #!/bin/bash
+      mkdir -p /opt/cca
+      exec > >(tee -a /var/log/cca-bootstrap.log | logger -t cca-bootstrap -s) 2>&1
+      set -euxo pipefail
+
+      if [[ -f /opt/cca/bootstrap.done ]]; then
+        echo "Bootstrap already completed"
+        exit 0
+      fi
+
+      export DEBIAN_FRONTEND=noninteractive
+      if ! grep -q 'deb-src' /etc/apt/sources.list.d/ubuntu.sources; then
+        sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+      fi
+      apt-get update
+      apt-get install libevent-dev libzmq3-dev git make g++ --yes
+      apt-get build-dep memcached --yes
+
+      if [[ ! -d /opt/cca/memcache-perf-dynamic/.git ]]; then
+        rm -rf /opt/cca/memcache-perf-dynamic
+        git clone https://github.com/eth-easl/memcache-perf-dynamic.git /opt/cca/memcache-perf-dynamic
+      fi
+      make -C /opt/cca/memcache-perf-dynamic
+
+      cat >/etc/systemd/system/mcperf-agent.service <<'EOF'
+      [Unit]
+      Description=CCA mcperf load agent
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      WorkingDirectory=/opt/cca/memcache-perf-dynamic
+      ExecStart=/opt/cca/memcache-perf-dynamic/mcperf -T 4 -A
+      Restart=always
+      RestartSec=2
+      StandardOutput=append:/var/log/mcperf-agent.log
+      StandardError=append:/var/log/mcperf-agent.log
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      systemctl daemon-reload
+      systemctl enable --now mcperf-agent.service
+      touch /opt/cca/bootstrap.done
+  image: ubuntu-os-cloud/ubuntu-2404-noble-amd64-v20250130
+  machineType: e2-standard-4
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    cloud.google.com/metadata-proxy-ready: "true"
+    kops.k8s.io/instancegroup: nodes-europe-west1-b
+    cca-project-nodetype: "client-agent-b"
+  role: Node
+  subnets:
+  - europe-west1
+  zones:
+  - europe-west1-b
+
+---
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: part3.k8s.local
+  name: node-a-8core
+spec:
+  image: ubuntu-os-cloud/ubuntu-2404-noble-amd64-v20250130
+  machineType: e2-standard-8
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    cloud.google.com/metadata-proxy-ready: "true"
+    kops.k8s.io/instancegroup: nodes-europe-west1-b
+    cca-project-nodetype: "node-a-8core"
+  role: Node
+  subnets:
+  - europe-west1
+  zones:
+  - europe-west1-b
+
+---
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: part3.k8s.local
+  name: node-b-4core
+spec:
+  image: ubuntu-os-cloud/ubuntu-2404-noble-amd64-v20250130
+  machineType: n2d-highcpu-4
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    cloud.google.com/metadata-proxy-ready: "true"
+    kops.k8s.io/instancegroup: nodes-europe-west1-b
+    cca-project-nodetype: "node-b-4core"
+  role: Node
+  subnets:
+  - europe-west1
+  zones:
+  - europe-west1-b

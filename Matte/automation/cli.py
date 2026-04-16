@@ -2,6 +2,14 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
+
+if __package__ in {None, ""}:
+    package_dir = Path(__file__).resolve().parent
+    package_parent = package_dir.parent
+    if str(package_parent) not in sys.path:
+        sys.path.insert(0, str(package_parent))
+    __package__ = package_dir.name
 
 from .audit import audit_schedule, load_runtime_table, load_schedule_model, render_audit_report
 from .catalog import JOB_CATALOG

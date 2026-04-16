@@ -69,6 +69,7 @@ class ClusterController:
             raise RuntimeError(create_secret.combined_output)
         self.kops("update", "cluster", "--name", self.config.cluster_name, "--yes", "--admin")
         self.kops("validate", "cluster", "--wait", "10m")
+        self.kops("export", "kubecfg", "--admin", "--name", self.config.cluster_name)
 
     def cluster_down(self) -> None:
         self.kops("delete", "cluster", "--name", self.config.cluster_name, "--yes")
