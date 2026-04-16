@@ -1,0 +1,26 @@
+{
+  "experiment_id": "part3-handcrafted",
+  "cluster_name": "part3.k8s.local",
+  "zone": "europe-west1-b",
+  "kops_state_store": "gs://cca-eth-2026-group-54-mpelossi",
+  "ssh_key_path": "~/.ssh/cloud-computing",
+  "ssh_user": "ubuntu",
+  "cluster_config_path": "../part3.yaml",
+  "results_root": "runs",
+  "submission_group": "054",
+  "memcached_name": "some-memcached",
+  "remote_repo_dir": "/opt/cca/memcache-perf-dynamic",
+  "mcperf_measurement": {
+    "agent_a_threads": 2,
+    "agent_b_threads": 4,
+    "measure_threads": 6,
+    "connections": 4,
+    "depth": 4,
+    "qps_interval": 1000,
+    "scan_start": 30000,
+    "scan_stop": 30500,
+    "scan_step": 5,
+    "max_start_wait_s": 180,
+    "completion_timeout_s": 3600
+  }
+}

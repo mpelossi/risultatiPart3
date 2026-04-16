@@ -1,0 +1,52 @@
+{
+  "policy_name": "baseline-two-queues",
+  "memcached": {
+    "node": "node-b-4core",
+    "cores": "0",
+    "threads": 1
+  },
+  "job_overrides": {},
+  "phases": [
+    {
+      "id": "start-streamcluster-and-blackscholes",
+      "after": "start",
+      "delay_s": 0,
+      "launch": ["streamcluster", "blackscholes"]
+    },
+    {
+      "id": "launch-freqmine",
+      "after": "jobs_complete",
+      "jobs_complete": ["blackscholes"],
+      "delay_s": 0,
+      "launch": ["freqmine"]
+    },
+    {
+      "id": "launch-canneal",
+      "after": "jobs_complete",
+      "jobs_complete": ["streamcluster"],
+      "delay_s": 0,
+      "launch": ["canneal"]
+    },
+    {
+      "id": "launch-barnes",
+      "after": "jobs_complete",
+      "jobs_complete": ["canneal"],
+      "delay_s": 0,
+      "launch": ["barnes"]
+    },
+    {
+      "id": "launch-vips",
+      "after": "jobs_complete",
+      "jobs_complete": ["barnes"],
+      "delay_s": 0,
+      "launch": ["vips"]
+    },
+    {
+      "id": "launch-radix",
+      "after": "jobs_complete",
+      "jobs_complete": ["vips"],
+      "delay_s": 0,
+      "launch": ["radix"]
+    }
+  ]
+}
