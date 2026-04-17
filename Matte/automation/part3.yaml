@@ -103,12 +103,42 @@ spec:
       fi
 
       export DEBIAN_FRONTEND=noninteractive
-      if ! grep -q 'deb-src' /etc/apt/sources.list.d/ubuntu.sources; then
-        sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
-      fi
-      apt-get update
-      apt-get install libevent-dev libzmq3-dev git make g++ --yes
-      apt-get build-dep memcached --yes
+      prepare_memcached_build_dependencies() {
+        local sources_file=/etc/apt/sources.list.d/ubuntu.sources
+        if [[ ! -f "${sources_file}" ]]; then
+          echo "ERROR: ${sources_file} is missing; cannot enable deb-src for memcached build dependencies."
+          return 1
+        fi
+
+        awk '
+          $1 == "Types:" {
+            has_deb_src = 0
+            for (i = 2; i <= NF; ++i) {
+              if ($i == "deb-src") {
+                has_deb_src = 1
+              }
+            }
+            if (!has_deb_src) {
+              print $0 " deb-src"
+              next
+            }
+          }
+          { print }
+        ' "${sources_file}" > "${sources_file}.tmp"
+        mv "${sources_file}.tmp" "${sources_file}"
+
+        apt-get update
+        if ! apt-cache showsrc memcached >/dev/null 2>&1; then
+          echo "ERROR: memcached source metadata is unavailable after enabling deb-src in ${sources_file}."
+          echo "ERROR: Inspect /var/log/cca-bootstrap.log and the cloud-init logs before retrying."
+          return 1
+        fi
+
+        apt-get install libevent-dev libzmq3-dev git make g++ --yes
+        apt-get build-dep memcached --yes
+      }
+
+      prepare_memcached_build_dependencies
 
       if [[ ! -d /opt/cca/memcache-perf-dynamic/.git ]]; then
         rm -rf /opt/cca/memcache-perf-dynamic
@@ -154,12 +184,42 @@ spec:
       fi
 
       export DEBIAN_FRONTEND=noninteractive
-      if ! grep -q 'deb-src' /etc/apt/sources.list.d/ubuntu.sources; then
-        sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
-      fi
-      apt-get update
-      apt-get install libevent-dev libzmq3-dev git make g++ --yes
-      apt-get build-dep memcached --yes
+      prepare_memcached_build_dependencies() {
+        local sources_file=/etc/apt/sources.list.d/ubuntu.sources
+        if [[ ! -f "${sources_file}" ]]; then
+          echo "ERROR: ${sources_file} is missing; cannot enable deb-src for memcached build dependencies."
+          return 1
+        fi
+
+        awk '
+          $1 == "Types:" {
+            has_deb_src = 0
+            for (i = 2; i <= NF; ++i) {
+              if ($i == "deb-src") {
+                has_deb_src = 1
+              }
+            }
+            if (!has_deb_src) {
+              print $0 " deb-src"
+              next
+            }
+          }
+          { print }
+        ' "${sources_file}" > "${sources_file}.tmp"
+        mv "${sources_file}.tmp" "${sources_file}"
+
+        apt-get update
+        if ! apt-cache showsrc memcached >/dev/null 2>&1; then
+          echo "ERROR: memcached source metadata is unavailable after enabling deb-src in ${sources_file}."
+          echo "ERROR: Inspect /var/log/cca-bootstrap.log and the cloud-init logs before retrying."
+          return 1
+        fi
+
+        apt-get install libevent-dev libzmq3-dev git make g++ --yes
+        apt-get build-dep memcached --yes
+      }
+
+      prepare_memcached_build_dependencies
 
       if [[ ! -d /opt/cca/memcache-perf-dynamic/.git ]]; then
         rm -rf /opt/cca/memcache-perf-dynamic
@@ -228,12 +288,42 @@ spec:
       fi
 
       export DEBIAN_FRONTEND=noninteractive
-      if ! grep -q 'deb-src' /etc/apt/sources.list.d/ubuntu.sources; then
-        sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
-      fi
-      apt-get update
-      apt-get install libevent-dev libzmq3-dev git make g++ --yes
-      apt-get build-dep memcached --yes
+      prepare_memcached_build_dependencies() {
+        local sources_file=/etc/apt/sources.list.d/ubuntu.sources
+        if [[ ! -f "${sources_file}" ]]; then
+          echo "ERROR: ${sources_file} is missing; cannot enable deb-src for memcached build dependencies."
+          return 1
+        fi
+
+        awk '
+          $1 == "Types:" {
+            has_deb_src = 0
+            for (i = 2; i <= NF; ++i) {
+              if ($i == "deb-src") {
+                has_deb_src = 1
+              }
+            }
+            if (!has_deb_src) {
+              print $0 " deb-src"
+              next
+            }
+          }
+          { print }
+        ' "${sources_file}" > "${sources_file}.tmp"
+        mv "${sources_file}.tmp" "${sources_file}"
+
+        apt-get update
+        if ! apt-cache showsrc memcached >/dev/null 2>&1; then
+          echo "ERROR: memcached source metadata is unavailable after enabling deb-src in ${sources_file}."
+          echo "ERROR: Inspect /var/log/cca-bootstrap.log and the cloud-init logs before retrying."
+          return 1
+        fi
+
+        apt-get install libevent-dev libzmq3-dev git make g++ --yes
+        apt-get build-dep memcached --yes
+      }
+
+      prepare_memcached_build_dependencies
 
       if [[ ! -d /opt/cca/memcache-perf-dynamic/.git ]]; then
         rm -rf /opt/cca/memcache-perf-dynamic

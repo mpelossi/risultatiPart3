@@ -20,6 +20,16 @@ cd risultatiPart3/Matte/automation
 python3 cli.py cluster up --config experiment.yaml
 ```
 
+If `cluster up` fails or gets interrupted, clean up before retrying:
+
+```bash
+python3 cli.py cluster down --config experiment.yaml
+../../checkCredits.sh
+```
+
+Only retry `cluster up` after `../../checkCredits.sh` shows no leftover Part 3 billable
+resources or network artifacts.
+
 You do **not** need to do this every time.
 
 You only need `cluster up` when:
@@ -34,6 +44,14 @@ already exists and is reachable.
 
 ```bash
 python3 cli.py provision check --config experiment.yaml
+```
+
+If `~/.ssh/cloud-computing` is passphrase-protected and not loaded in `ssh-agent`, this
+command may ask for the passphrase up to **3 times**, roughly once for each client VM that
+is checked. To avoid repeated prompts, run:
+
+```bash
+ssh-add ~/.ssh/cloud-computing
 ```
 
 ### 4. Inspect and validate the schedule
@@ -126,6 +144,7 @@ This checks:
 - that your Google auth is still valid
 - whether `kubectl` is currently usable
 - whether there are still billable GCP resources running
+- whether stale Part 3 VPC/subnet/firewall/route artifacts are still around
 
 This script does **not** create, update, or delete the cluster.
 
@@ -143,8 +162,21 @@ This does the full bring-up flow:
 - runs `kops update cluster`
 - runs `kops validate cluster`
 - exports kubeconfig locally
+- labels the Kubernetes nodes with canonical `cca-project-nodetype` values such as
+  `client-agent-a` and `node-a-8core`
 
 You do **not** need to run this before every experiment.
+
+If `cluster up` fails or is interrupted, do **not** immediately retry it on top of the
+half-finished state. Run:
+
+```bash
+python3 cli.py cluster down --config experiment.yaml
+../../checkCredits.sh
+```
+
+Use `../../checkCredits.sh` to confirm there are no leftover billable resources or Part 3
+network artifacts before bringing the cluster up again.
 
 ### Step 3. Make sure the client VMs are bootstrapped
 
@@ -154,11 +186,34 @@ Run:
 python3 cli.py provision check --config experiment.yaml
 ```
 
+If your SSH key is passphrase-protected and not already loaded in `ssh-agent`, expect up to
+**3 passphrase prompts** here, roughly one per checked client VM. If you want to unlock the
+key once instead of on each SSH call, run:
+
+```bash
+ssh-add ~/.ssh/cloud-computing
+```
+
 This checks that:
 - `client-agent-a` exists and has `mcperf`
 - `client-agent-b` exists and has `mcperf`
 - `client-measure` exists and has `mcperf`
 - the `mcperf-agent.service` units are active on the agent VMs
+- the randomized Kubernetes node names have the expected canonical
+  `cca-project-nodetype` labels so jobs can schedule correctly
+
+The CLI prints each node as `READY` or `WAITING`:
+- `WAITING` means bootstrap is still in progress or some expected software/service is missing
+- `READY` means that node is usable for experiments
+- for `client-agent-a` and `client-agent-b`, `READY` requires `mcperf-agent.service active`
+- for `client-measure`, `READY` only requires bootstrap and `mcperf`; `mcperf-agent.service`
+  is not expected there
+
+If a node stays in `WAITING`, print the ready-made debug commands with:
+
+```bash
+python3 cli.py debug commands --config experiment.yaml --policy schedule.yaml
+```
 
 ### Step 4. Check the schedule before you spend credits
 
@@ -245,6 +300,13 @@ want to apply cluster-definition changes.
 
 Checks whether the three client VMs are bootstrapped correctly for Part 3.
 
+### `python3 cli.py debug commands --config experiment.yaml --policy schedule.yaml`
+
+Prints exact `gcloud compute ssh`, `kubectl`, `journalctl`, `tail -f`, and serial-console
+commands for debugging the client VMs, memcached pod, and saved `mcperf` output. Add
+`--run-id <run-id>` if you want the exact memcached pod name and `mcperf.txt` path for one
+run.
+
 ### `python3 cli.py show --policy schedule.yaml`
 
 Prints the current schedule in a human-readable format.
@@ -294,6 +356,18 @@ If the cluster already exists and you only need kubeconfig:
 kops export kubecfg --admin --name part3.k8s.local
 ```
 
+### `cluster up` failed halfway through
+
+Clean up first:
+
+```bash
+python3 cli.py cluster down --config experiment.yaml
+../../checkCredits.sh
+```
+
+Only retry `cluster up` after `../../checkCredits.sh` reports that there are no leftover
+billable resources or Part 3 network artifacts.
+
 ### `run once` hangs at `Cleaning previous managed workloads`
 
 That usually means `kubectl` cannot actually talk to the cluster, even though the
@@ -306,6 +380,38 @@ kubectl get nodes -o wide
 ```
 
 If that does not work, fix cluster access before running experiments.
+
+### `provision check` or `run once` says a client is `WAITING`
+
+That usually means the VM bootstrap script did not finish. In this project, the most likely
+failure mode is:
+- cloud-init started the bootstrap script
+- `apt-get build-dep memcached --yes` failed because `deb-src` was not enabled correctly
+- the script exited before `mcperf`, `mcperf-agent.service`, and `/opt/cca/bootstrap.done`
+
+Run:
+
+```bash
+python3 cli.py debug commands --config experiment.yaml --policy schedule.yaml
+```
+
+Then inspect, in this order:
+- `cloud-final.service`
+- `/var/log/cca-bootstrap.log`
+- the serial console output from `gcloud compute instances get-serial-port-output ...`
+
+If provisioning is still failing, do **not** expect a memcached pod yet. `run once` only
+applies the memcached manifest after provisioning passes.
+
+If you changed `part3.yaml` to fix the startup script, remember that cloud-init only runs
+when the VM is created. Existing client VMs will keep the old broken bootstrap state, so
+you need to recreate the cluster with `python3 cli.py cluster down --config experiment.yaml`
+followed by `python3 cli.py cluster up --config experiment.yaml`.
+
+Use the command types like this:
+- `gcloud compute ssh ...` opens a shell on the VM
+- `kubectl exec -it <pod> -- sh` opens a shell inside the container
+- `kubectl logs -f`, `journalctl -f`, and `tail -f` follow live output instead of opening a shell
 
 ## Important Notes
 

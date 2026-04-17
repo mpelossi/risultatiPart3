@@ -12,6 +12,7 @@ from .catalog import JOB_CATALOG
 from .cluster import ClusterController
 from .collect import collect_describes, collect_live_pods, summarize_run
 from .config import ExperimentConfig, Phase, PolicyConfig
+from .debug import format_debug_command_hint, summarize_provisioning_hints
 from .manifests import (
     ResolvedBatchJob,
     render_batch_job_manifest,
@@ -19,7 +20,7 @@ from .manifests import (
     resolve_jobs,
     resolve_memcached,
 )
-from .provision import assert_client_provisioning
+from .provision import ProvisioningError, assert_client_provisioning
 from .utils import append_log, ensure_directory, utc_timestamp
 
 
@@ -32,6 +33,7 @@ class MeasurementHandle:
 
 class ExperimentRunner:
     poll_interval_s = 1.0
+    scheduler_status_interval_s = 15.0
 
     def __init__(self, experiment: ExperimentConfig, policy: PolicyConfig):
         self.experiment = experiment
@@ -47,6 +49,9 @@ class ExperimentRunner:
     def _log(self, log_path: Path, message: str) -> None:
         append_log(log_path, message)
         print(message)
+
+    def _log_run_prefix(self, run_id: str, message: str) -> None:
+        print(f"[run {run_id}] {message}")
 
     def _write_policy_snapshot(self, run_dir: Path) -> None:
         shutil.copyfile(self.experiment.config_path, run_dir / "experiment.yaml")
@@ -229,6 +234,7 @@ class ExperimentRunner:
         failed_jobs: set[str] = set()
         dependency_ready_at: dict[str, float] = {}
         deadline = self._current_time() + self.experiment.measurement.completion_timeout_s
+        next_status_log_at = self._current_time()
 
         while True:
             now = self._current_time()
@@ -283,15 +289,36 @@ class ExperimentRunner:
                 return launched_jobs
 
             if not launched_this_cycle:
+                if now >= next_status_log_at:
+                    running_jobs = sorted(
+                        job_name
+                        for job_name, info in snapshot.items()
+                        if info.get("status") == "running"
+                    )
+                    pending_phases = [
+                        phase.phase_id for phase in phases if phase.phase_id not in launched_phase_ids
+                    ]
+                    self._log(
+                        log_path,
+                        "Scheduler heartbeat: "
+                        f"launched_phases={sorted(launched_phase_ids)} "
+                        f"pending_phases={pending_phases} "
+                        f"completed_jobs={sorted(completed_jobs)} "
+                        f"running_jobs={running_jobs}",
+                    )
+                    next_status_log_at = now + self.scheduler_status_interval_s
                 self._sleep(min(self.poll_interval_s, max(deadline - self._current_time(), 0.0)))
 
     def run_once(self, *, dry_run: bool = False) -> Path:
         run_id, run_dir, manifests_dir = self._create_run_dir()
         log_path = run_dir / "events.log"
+        self._log_run_prefix(run_id, f"Preparing run in {run_dir}")
         self._write_policy_snapshot(run_dir)
         memcached_manifest, resolved_jobs = self._render_manifests(run_id=run_id, manifests_dir=manifests_dir)
         plan_path = run_dir / "phase_plan.json"
         plan_path.write_text(json.dumps(self._phase_plan(resolved_jobs), indent=2) + "\n", encoding="utf-8")
+        self._log(log_path, f"Run directory prepared: {run_dir}")
+        self._log(log_path, f"Rendered {1 + len(resolved_jobs)} manifests into {manifests_dir}")
 
         if dry_run:
             self._log(log_path, f"Dry run prepared at {run_dir}")
@@ -299,8 +326,35 @@ class ExperimentRunner:
 
         self._log(log_path, "Cleaning previous managed workloads")
         self.cluster.cleanup_managed_workloads()
-        self._log(log_path, "Checking client provisioning")
-        assert_client_provisioning(self.cluster)
+        self._log(log_path, "Ensuring canonical node labels and checking client provisioning")
+        try:
+            assert_client_provisioning(self.cluster)
+        except ProvisioningError as exc:
+            for status in exc.statuses.values():
+                self._log(log_path, str(status))
+            for hint in summarize_provisioning_hints(exc.statuses):
+                self._log(log_path, f"Hint: {hint}")
+            self._log(
+                log_path,
+                "Debug commands: "
+                + format_debug_command_hint(
+                    config_path=self.experiment.config_path,
+                    policy_path=self.policy.config_path,
+                    run_id=run_id,
+                ),
+            )
+            raise
+        except RuntimeError:
+            self._log(
+                log_path,
+                "Debug commands: "
+                + format_debug_command_hint(
+                    config_path=self.experiment.config_path,
+                    policy_path=self.policy.config_path,
+                    run_id=run_id,
+                ),
+            )
+            raise
 
         self._log(log_path, "Applying memcached manifest")
         self.cluster.apply_manifest(memcached_manifest)
@@ -326,16 +380,21 @@ class ExperimentRunner:
             agent_b_ip=agent_b_ip,
             log_path=log_path,
         )
+        self._log(log_path, "Waiting for mcperf measurement header")
         self._wait_for_measurement_start(measurement)
+        self._log(log_path, "mcperf measurement is live")
 
+        self._log(log_path, "Starting phase scheduler")
         launched_jobs = self._run_phase_scheduler(
             run_id=run_id,
             resolved_jobs=resolved_jobs,
             manifests_dir=manifests_dir,
             log_path=log_path,
         )
+        self._log(log_path, "All phases launched; waiting for mcperf to finish")
         self._wait_for_measurement_finish(measurement)
 
+        self._log(log_path, "Collecting live pod snapshot and summarizing run")
         collect_live_pods(self.cluster, run_dir)
         summary = summarize_run(
             run_dir,
@@ -351,11 +410,21 @@ class ExperimentRunner:
                 job_name_map={job_id: job.kubernetes_name for job_id, job in launched_jobs.items()},
                 summary=summary,
             )
-        self._log(log_path, f"Run completed with status {summary['overall_status']}")
+        self._log(
+            log_path,
+            "Run completed with status "
+            f"{summary['overall_status']} makespan={summary.get('makespan_s')} "
+            f"max_p95_us={summary.get('max_observed_p95_us')}",
+        )
         return run_dir
 
     def run_batch(self, runs: int, *, dry_run: bool = False) -> list[Path]:
         run_dirs: list[Path] = []
-        for _ in range(runs):
-            run_dirs.append(self.run_once(dry_run=dry_run))
+        print(f"Starting batch of {runs} run(s)")
+        for index in range(1, runs + 1):
+            print(f"Starting run {index}/{runs}")
+            run_dir = self.run_once(dry_run=dry_run)
+            run_dirs.append(run_dir)
+            print(f"Finished run {index}/{runs}: {run_dir}")
+        print("Batch complete")
         return run_dirs

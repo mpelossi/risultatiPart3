@@ -16,9 +16,14 @@ from .catalog import JOB_CATALOG
 from .cluster import ClusterController
 from .collect import collect_live_pods, summarize_run
 from .config import load_experiment_config, load_policy_config
+from .debug import format_debug_command_hint, render_debug_commands, summarize_provisioning_hints
 from .export import export_submission
 from .gui import launch_planner_gui
-from .provision import check_client_provisioning
+from .provision import (
+    check_client_provisioning,
+    render_provision_check_note,
+    render_provision_expectations,
+)
 from .results import load_run_summaries, sort_best_runs
 from .runner import ExperimentRunner
 from .manifests import resolve_jobs
@@ -34,6 +39,13 @@ def _build_parser() -> argparse.ArgumentParser:
     cluster_up.add_argument("--config", required=True)
     cluster_down = cluster_sub.add_parser("down")
     cluster_down.add_argument("--config", required=True)
+
+    debug_parser = subparsers.add_parser("debug")
+    debug_sub = debug_parser.add_subparsers(dest="debug_command", required=True)
+    debug_commands = debug_sub.add_parser("commands")
+    debug_commands.add_argument("--config", required=True)
+    debug_commands.add_argument("--policy")
+    debug_commands.add_argument("--run-id")
 
     provision_parser = subparsers.add_parser("provision")
     provision_sub = provision_parser.add_subparsers(dest="provision_command", required=True)
@@ -101,12 +113,42 @@ def main(argv: list[str] | None = None) -> int:
             cluster.cluster_down()
         return 0
 
+    if args.command == "debug" and args.debug_command == "commands":
+        experiment = load_experiment_config(args.config)
+        cluster = ClusterController(experiment)
+        policy = load_policy_config(args.policy) if args.policy else None
+        print(
+            render_debug_commands(
+                experiment=experiment,
+                cluster=cluster,
+                policy=policy,
+                run_id=args.run_id,
+            )
+        )
+        return 0
+
     if args.command == "provision":
         experiment = load_experiment_config(args.config)
         cluster = ClusterController(experiment)
-        statuses = check_client_provisioning(cluster)
+        print(render_provision_check_note(experiment.ssh_key_path))
+        try:
+            statuses = check_client_provisioning(cluster)
+        except RuntimeError:
+            print(
+                "Debug commands:",
+                format_debug_command_hint(config_path=experiment.config_path),
+            )
+            raise
         for status in statuses.values():
             print(status)
+        print(render_provision_expectations())
+        if any(not status.is_ready for status in statuses.values()):
+            for hint in summarize_provisioning_hints(statuses):
+                print("Hint:", hint)
+            print(
+                "Debug commands:",
+                format_debug_command_hint(config_path=experiment.config_path),
+            )
         return 0
 
     if args.command == "run":

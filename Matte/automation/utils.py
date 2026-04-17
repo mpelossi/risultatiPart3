@@ -54,10 +54,47 @@ def run_command(
     cwd: Path | None = None,
     input_text: str | None = None,
     check: bool = True,
+    live_output: bool = False,
+    output_prefix: str | None = None,
 ) -> CommandResult:
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
+
+    if live_output:
+        process = subprocess.Popen(
+            list(args),
+            cwd=str(cwd) if cwd else None,
+            env=merged_env,
+            stdin=subprocess.PIPE if input_text is not None else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        captured_lines: list[str] = []
+        if input_text is not None and process.stdin is not None:
+            process.stdin.write(input_text)
+            process.stdin.close()
+        assert process.stdout is not None
+        for line in process.stdout:
+            captured_lines.append(line)
+            text = line.rstrip()
+            if output_prefix:
+                print(f"{output_prefix}{text}")
+            else:
+                print(text)
+        returncode = process.wait()
+        stdout = "".join(captured_lines)
+        result = CommandResult(
+            args=list(args),
+            returncode=returncode,
+            stdout=stdout,
+            stderr="",
+        )
+        if check and result.returncode != 0:
+            joined = " ".join(args)
+            raise RuntimeError(f"Command failed ({joined}):\n{result.combined_output}")
+        return result
 
     completed = subprocess.run(
         list(args),
@@ -78,4 +115,3 @@ def run_command(
         joined = " ".join(args)
         raise RuntimeError(f"Command failed ({joined}):\n{result.combined_output}")
     return result
-

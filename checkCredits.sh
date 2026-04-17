@@ -9,10 +9,11 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$SCRIPT_DIR"
 AUTOMATION_DIR="${CCA_AUTOMATION_DIR:-$REPO_ROOT/Matte/automation}"
-CLI_MODULE="${CCA_CLI_MODULE:-Matte.automation.cli}"
 CLI_PATH="$AUTOMATION_DIR/cli.py"
 DEFAULT_CONFIG_PATH="$AUTOMATION_DIR/experiment.yaml"
 DEFAULT_POLICY_PATH="$AUTOMATION_DIR/schedule.yaml"
+AUTOMATION_CLUSTER_UP_HINT="cd \"$AUTOMATION_DIR\" && python3 cli.py cluster up --config experiment.yaml"
+AUTOMATION_CLUSTER_DOWN_HINT="cd \"$AUTOMATION_DIR\" && python3 cli.py cluster down --config experiment.yaml"
 
 BLOCKERS=()
 WARNINGS=()
@@ -28,6 +29,12 @@ PYTHON_OK=0
 GCLOUD_AUTH_OK=0
 ADC_OK=0
 RESOURCE_WARNINGS=0
+CONFIG_CLUSTER_NAME=""
+CONFIG_KOPS_STATE_STORE=""
+CONFIG_ZONE=""
+CONFIG_REGION=""
+CONFIG_NETWORK_NAME=""
+CONFIG_SUBNET_NAME=""
 
 section() {
   echo -e "\n${CYAN}== $1 ==${NC}"
@@ -133,8 +140,8 @@ check_cli_help() {
     return
   fi
 
-  if capture_command bash -lc "cd \"$REPO_ROOT\" && python3 -m $CLI_MODULE --help"; then
-    ok "python3 -m $CLI_MODULE --help works"
+  if capture_command bash -lc "cd \"$AUTOMATION_DIR\" && python3 cli.py --help"; then
+    ok "python3 cli.py --help works from $AUTOMATION_DIR"
   else
     add_blocker "The automation CLI module is not runnable"
     if [[ -n "$CAPTURED_STDERR" ]]; then
@@ -182,6 +189,29 @@ PY"; then
       while IFS= read -r line; do
         [[ -n "$line" ]] && echo "  $line"
       done <<< "$CAPTURED_STDERR"
+    fi
+  fi
+}
+
+load_config_hints() {
+  if [[ "$PYTHON_OK" -ne 1 || ! -f "$DEFAULT_CONFIG_PATH" ]]; then
+    return
+  fi
+
+  if capture_command bash -lc "cd \"$REPO_ROOT\" && python3 - <<'PY'
+from Matte.automation.config import load_experiment_config
+cfg = load_experiment_config('Matte/automation/experiment.yaml')
+print(cfg.cluster_name)
+print(cfg.kops_state_store)
+print(cfg.zone)
+PY"; then
+    CONFIG_CLUSTER_NAME="$(printf '%s\n' "$CAPTURED_STDOUT" | sed -n '1p' | tr -d '\r')"
+    CONFIG_KOPS_STATE_STORE="$(printf '%s\n' "$CAPTURED_STDOUT" | sed -n '2p' | tr -d '\r')"
+    CONFIG_ZONE="$(printf '%s\n' "$CAPTURED_STDOUT" | sed -n '3p' | tr -d '\r')"
+    CONFIG_REGION="${CONFIG_ZONE%-*}"
+    CONFIG_NETWORK_NAME="${CONFIG_CLUSTER_NAME//./-}"
+    if [[ -n "$CONFIG_REGION" && -n "$CONFIG_NETWORK_NAME" ]]; then
+      CONFIG_SUBNET_NAME="${CONFIG_REGION}-${CONFIG_NETWORK_NAME}"
     fi
   fi
 }
@@ -240,18 +270,31 @@ check_kubectl_access() {
     ok "kubectl current context: $current_context"
   else
     add_warning "kubectl has no current context configured"
+    add_next_step "$AUTOMATION_CLUSTER_UP_HINT"
+    return
   fi
 
-  if capture_command kubectl get nodes -o wide --request-timeout=10s; then
+  local current_server
+  current_server="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null | tr -d '\r')"
+  if [[ -n "$current_server" ]]; then
+    ok "kubectl API server: $current_server"
+  fi
+  if [[ -z "$current_server" || "$current_server" == "http://localhost:8080" || "$current_server" == "https://localhost:8080" ]]; then
+    add_warning "kubectl is currently pointing at localhost:8080, so live cluster commands will fail until the Part 3 cluster is brought up"
+    add_next_step "$AUTOMATION_CLUSTER_UP_HINT"
+    return
+  fi
+
+  if capture_command kubectl get nodes -o wide --request-timeout=5s; then
     ok "kubectl can reach a cluster API"
   else
     local reason="$CAPTURED_STDERR"
     if [[ "$reason" == *"127.0.0.1:8080"* || "$reason" == *"localhost:8080"* ]]; then
-      add_warning "kubectl is currently pointing at localhost:8080, so live cluster commands will fail until kubeconfig is exported"
-      add_next_step "kops export kubecfg --admin --name <cluster-name>"
+      add_warning "kubectl is currently pointing at localhost:8080, so live cluster commands will fail until the Part 3 cluster is brought up"
+      add_next_step "$AUTOMATION_CLUSTER_UP_HINT"
     elif [[ "$reason" == *"Unauthorized"* || "$reason" == *"You must be logged in to the server"* ]]; then
       add_warning "kubectl has a context, but its credentials are not accepted by the cluster"
-      add_next_step "kops export kubecfg --admin --name <cluster-name>"
+      add_next_step "$AUTOMATION_CLUSTER_UP_HINT"
     else
       add_warning "kubectl could not reach the cluster API cleanly"
     fi
@@ -261,6 +304,110 @@ check_kubectl_access() {
         [[ -n "$line" ]] && echo "  $line"
       done <<< "$reason"
     fi
+  fi
+}
+
+check_kops_clusters() {
+  section "kops State Store"
+  if [[ "$KOPS_OK" -ne 1 || "$ADC_OK" -ne 1 || -z "$CONFIG_KOPS_STATE_STORE" ]]; then
+    return
+  fi
+
+  if ! capture_command env KOPS_STATE_STORE="$CONFIG_KOPS_STATE_STORE" kops get clusters -o name; then
+    add_warning "Could not inspect clusters in the configured kops state store"
+    if [[ -n "$CAPTURED_STDERR" ]]; then
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && echo "  $line"
+      done <<< "$CAPTURED_STDERR"
+    fi
+    return
+  fi
+
+  local result="$CAPTURED_STDOUT"
+  local found_any=0
+  local line
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    found_any=1
+    if [[ -n "$CONFIG_CLUSTER_NAME" && "$line" == "$CONFIG_CLUSTER_NAME" ]]; then
+      ok "Configured Part 3 cluster exists in state store: $line"
+    else
+      add_warning "Found another cluster in the same state store: $line"
+      add_next_step "env KOPS_STATE_STORE=\"$CONFIG_KOPS_STATE_STORE\" kops delete cluster --name $line --yes"
+    fi
+  done <<< "$result"
+
+  if [[ "$found_any" -eq 0 ]]; then
+    warn "No clusters found in the configured kops state store"
+    add_next_step "$AUTOMATION_CLUSTER_UP_HINT"
+  fi
+}
+
+check_cluster_network_leftovers() {
+  section "Part3 Network Leftovers"
+  if [[ "$GCLOUD_OK" -ne 1 || "$GCLOUD_AUTH_OK" -ne 1 || -z "$CONFIG_NETWORK_NAME" ]]; then
+    return
+  fi
+
+  local found_leftovers=0
+
+  if capture_command gcloud compute networks describe "$CONFIG_NETWORK_NAME" --quiet; then
+    found_leftovers=1
+    add_warning "Found leftover Part 3 VPC network: $CONFIG_NETWORK_NAME"
+  else
+    ok "Part 3 VPC network is absent"
+  fi
+
+  if [[ -n "$CONFIG_SUBNET_NAME" ]] && capture_command \
+    gcloud compute networks subnets describe "$CONFIG_SUBNET_NAME" --region "$CONFIG_REGION" --quiet; then
+    found_leftovers=1
+    add_warning "Found leftover Part 3 subnet: $CONFIG_SUBNET_NAME"
+  else
+    ok "Part 3 subnet is absent"
+  fi
+
+  local firewall_rules=""
+  if capture_command gcloud compute firewall-rules list \
+    --filter="network:$CONFIG_NETWORK_NAME" --format='value(name)'; then
+    firewall_rules="$CAPTURED_STDOUT"
+    local firewall_count
+    firewall_count=$(printf '%s\n' "$firewall_rules" | grep -c . || true)
+    if [[ "$firewall_count" -eq 0 ]]; then
+      ok "No Part 3 firewall rules found"
+    else
+      found_leftovers=1
+      add_warning "Found $firewall_count Part 3 firewall rule(s)"
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && echo "  - $line"
+      done <<< "$firewall_rules"
+    fi
+  fi
+
+  local routes=""
+  if capture_command gcloud compute routes list \
+    --filter="network:$CONFIG_NETWORK_NAME" --format='value(name)'; then
+    routes="$CAPTURED_STDOUT"
+    local route_count
+    route_count=$(printf '%s\n' "$routes" | grep -c . || true)
+    if [[ "$route_count" -eq 0 ]]; then
+      ok "No Part 3 VPC routes found"
+    else
+      found_leftovers=1
+      add_warning "Found $route_count Part 3 route(s)"
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && echo "  - $line"
+      done <<< "$routes"
+    fi
+  fi
+
+  if [[ "$found_leftovers" -eq 1 ]]; then
+    add_next_step "$AUTOMATION_CLUSTER_DOWN_HINT"
+    if [[ -n "$CONFIG_SUBNET_NAME" ]]; then
+      add_next_step "gcloud compute networks subnets delete \"$CONFIG_SUBNET_NAME\" --region \"$CONFIG_REGION\""
+    fi
+    add_next_step "gcloud compute firewall-rules list --filter='network:$CONFIG_NETWORK_NAME'"
+    add_next_step "gcloud compute routes list --filter='network:$CONFIG_NETWORK_NAME'"
+    add_next_step "gcloud compute networks delete \"$CONFIG_NETWORK_NAME\""
   fi
 }
 
@@ -369,7 +516,10 @@ run_doctor() {
   check_automation_files
   check_cli_help
   check_default_config_parse
+  load_config_hints
   check_gcloud_auth
+  check_kops_clusters
+  check_cluster_network_leftovers
   check_kubectl_access
   check_billable_resources
   print_summary
@@ -405,16 +555,18 @@ Usage:
 
 What this script does:
   - checks that the risultatiPart3 automation files exist
-  - checks that "python3 -m $CLI_MODULE --help" works
+  - checks that the local automation CLI is runnable
   - checks that the default config and schedule parse cleanly
   - checks gcloud user auth and application-default auth
+  - inspects the configured kops state store for stale non-Part-3 clusters
+  - checks for stale Part 3 VPC/subnet/firewall/route leftovers that can block kops
   - checks whether kubectl currently has usable cluster access
   - lists active billable GCP resources still consuming credits
 
 What this script does not do:
   - it does not create, update, replace, validate, or delete any cluster
   - it does not call "cluster up"
-  - it does not export kubeconfig for you
+  - it only suggests the local Part 3 commands to run next
 EOF
 }
 
