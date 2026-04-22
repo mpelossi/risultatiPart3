@@ -115,11 +115,14 @@ class DebugCommandRenderingTests(unittest.TestCase):
 
         rendered = render_debug_commands(experiment=_experiment_config(), cluster=cluster)
 
-        self.assertIn("client-agent-a:", rendered)
+        self.assertIn("Resolved nodes:", rendered)
+        self.assertIn("- client-agent-a: client-agent-a-fn6b", rendered)
+        self.assertIn("client-agent-a (client-agent-a-fn6b):", rendered)
         self.assertIn("ubuntu@client-agent-a-fn6b", rendered)
         self.assertIn("ubuntu@client-agent-b-rw1c", rendered)
         self.assertIn("ubuntu@client-measure-2dll", rendered)
         self.assertIn("gcloud compute instances get-serial-port-output client-agent-a-fn6b", rendered)
+        self.assertIn("client-measure` does not run `mcperf-agent.service`", rendered)
 
     def test_render_debug_commands_includes_exact_memcached_and_mcperf_paths(self) -> None:
         cluster = FakeClusterController({"items": []})
@@ -142,6 +145,7 @@ class DebugCommandRenderingTests(unittest.TestCase):
         self.assertIn("kubectl logs -f memcached-server-run-1", rendered)
         self.assertIn("kubectl exec -it memcached-server-run-1 -- sh", rendered)
         self.assertIn("tail -f /tmp/runs/demo/run-1/mcperf.txt", rendered)
+        self.assertIn("This is usually the most useful place to watch the benchmark", rendered)
 
     def test_summarize_provisioning_hints_explains_bootstrap_failure(self) -> None:
         hints = summarize_provisioning_hints(_waiting_statuses())
