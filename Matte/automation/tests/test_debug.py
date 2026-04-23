@@ -209,19 +209,91 @@ class FailureSurfaceTests(unittest.TestCase):
             )
             runner.cluster = MinimalRunnerCluster()
 
-            with patch("Matte.automation.runner.utc_timestamp", return_value="20260417T010203Z"), patch(
+            with patch("Matte.automation.runner.run_id_timestamp", return_value="2026-04-17-03h02m03s"), patch(
                 "Matte.automation.runner.assert_client_provisioning",
                 side_effect=error,
             ), self.assertRaises(ProvisioningError):
                 runner.run_once()
 
             events_log = (
-                root / "runs" / "demo" / "20260417t010203z" / "events.log"
+                root / "runs" / "demo" / "2026-04-17-03h02m03s" / "events.log"
             ).read_text(encoding="utf-8")
             self.assertIn("Hint: client-agent-a: bootstrap appears to have failed before mcperf installation", events_log)
             self.assertIn("Debug commands: python3 cli.py debug commands --config", events_log)
             self.assertIn("--policy", events_log)
-            self.assertIn("--run-id 20260417t010203z", events_log)
+            self.assertIn("--run-id 2026-04-17-03h02m03s", events_log)
+
+    def test_results_best_uses_automation_runs_directory_by_default(self) -> None:
+        output = io.StringIO()
+        expected_root = Path(cli.__file__).resolve().parent / "runs"
+
+        with patch("Matte.automation.cli.load_run_summaries", return_value=[] ) as load_summaries:
+            with redirect_stdout(output):
+                cli.main(["results", "best", "--experiment", "demo"])
+
+        self.assertEqual(load_summaries.call_args.args[0], expected_root.resolve())
+        self.assertEqual(load_summaries.call_args.args[1], "demo")
+        self.assertIn("No completed run summaries found.", output.getvalue())
+
+    def test_export_submission_uses_automation_runs_directory_by_default(self) -> None:
+        output = io.StringIO()
+        expected_root = Path(cli.__file__).resolve().parent / "runs"
+
+        with patch("Matte.automation.cli.export_submission", return_value=Path("/tmp/submission")) as export_submission:
+            with redirect_stdout(output):
+                cli.main(["export", "submission", "--experiment", "demo", "--group", "054", "--task", "3_1"])
+
+        self.assertEqual(export_submission.call_args.kwargs["results_root"], expected_root.resolve())
+        self.assertEqual(output.getvalue().strip(), "/tmp/submission")
+
+    def test_run_cli_rejects_dry_run_with_precache(self) -> None:
+        with self.assertRaises(SystemExit) as exc:
+            cli.main(
+                [
+                    "run",
+                    "once",
+                    "--config",
+                    "experiment.yaml",
+                    "--policy",
+                    "policy.yaml",
+                    "--dry-run",
+                    "--precache",
+                ]
+            )
+
+        self.assertEqual(exc.exception.code, 2)
+
+    def test_run_cli_passes_precache_to_runner(self) -> None:
+        experiment = _experiment_config()
+        policy = PolicyConfig(
+            config_path=Path("/tmp/policy.yaml"),
+            policy_name="test-policy",
+            memcached=MemcachedConfig(node="node-b-4core", cores="0", threads=1),
+            job_overrides={},
+            phases=[],
+        )
+        output = io.StringIO()
+
+        with patch("Matte.automation.cli.load_experiment_config", return_value=experiment), patch(
+            "Matte.automation.cli.load_policy_config",
+            return_value=policy,
+        ), patch("Matte.automation.cli.ExperimentRunner") as runner_cls:
+            runner_cls.return_value.run_once.return_value = Path("/tmp/run")
+            with redirect_stdout(output):
+                cli.main(
+                    [
+                        "run",
+                        "once",
+                        "--config",
+                        "experiment.yaml",
+                        "--policy",
+                        "policy.yaml",
+                        "--precache",
+                    ]
+                )
+
+        runner_cls.return_value.run_once.assert_called_once_with(dry_run=False, precache=True)
+        self.assertEqual(output.getvalue().strip(), "/tmp/run")
 
 
 class BootstrapScriptTests(unittest.TestCase):

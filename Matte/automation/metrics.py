@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
+
+from .timing import collect_completed_job_timings, compute_makespan_s, load_pod_payload
 
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -54,13 +55,12 @@ def parse_mcperf_output(path: Path | None) -> dict[str, object]:
 
 
 def summarize_pods(path: Path, expected_jobs: set[str]) -> dict[str, object]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = load_pod_payload(path)
+    completed_timings = collect_completed_job_timings(payload, expected_jobs=expected_jobs)
     job_summaries: dict[str, dict[str, object]] = {
         job_id: {"job_id": job_id, "status": "missing"} for job_id in expected_jobs
     }
     memcached_summary: dict[str, object] | None = None
-    start_times = []
-    finish_times = []
 
     for item in payload.get("items", []):
         metadata = item.get("metadata", {})
@@ -89,17 +89,10 @@ def summarize_pods(path: Path, expected_jobs: set[str]) -> dict[str, object]:
             job_id = container_name
         if not job_id or job_id not in expected_jobs:
             continue
-        started_at = terminated.get("startedAt")
-        finished_at = terminated.get("finishedAt")
-        parsed_start = _parse_time(started_at)
-        parsed_finish = _parse_time(finished_at)
-        if parsed_start:
-            start_times.append(parsed_start)
-        if parsed_finish:
-            finish_times.append(parsed_finish)
-        runtime_s = None
-        if parsed_start and parsed_finish:
-            runtime_s = (parsed_finish - parsed_start).total_seconds()
+        timing = completed_timings.get(job_id)
+        started_at = timing.started_at if timing is not None else terminated.get("startedAt")
+        finished_at = timing.finished_at if timing is not None else terminated.get("finishedAt")
+        runtime_s = timing.runtime_s if timing is not None else None
         if terminated:
             exit_code = terminated.get("exitCode")
             job_status = "completed" if exit_code == 0 else "failed"
@@ -117,13 +110,16 @@ def summarize_pods(path: Path, expected_jobs: set[str]) -> dict[str, object]:
         )
         job_summaries[job_id] = summary
 
-    makespan_s = None
-    if start_times and finish_times:
-        makespan_s = (max(finish_times) - min(start_times)).total_seconds()
+    timing_complete = len(completed_timings) == len(expected_jobs) and all(
+        job_summaries[job_id].get("status") == "completed" for job_id in expected_jobs
+    )
+    makespan_s = compute_makespan_s(completed_timings) if timing_complete else None
     return {
         "jobs": job_summaries,
         "memcached": memcached_summary,
         "makespan_s": makespan_s,
+        "completed_job_count": len(completed_timings),
+        "timing_complete": timing_complete,
     }
 
 
@@ -157,6 +153,9 @@ def build_summary(
         "memcached": pod_summary["memcached"],
         "jobs": jobs,
         "makespan_s": pod_summary["makespan_s"],
+        "completed_job_count": pod_summary["completed_job_count"],
+        "expected_job_count": len(expected_jobs),
+        "timing_complete": pod_summary["timing_complete"],
         "max_observed_p95_us": mcperf_summary["max_p95_us"],
         "slo_violations": mcperf_summary["slo_violations"],
         "measurement_status": measurement_status,

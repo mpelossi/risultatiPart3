@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .catalog import JOB_CATALOG, JobCatalogEntry
+from .catalog import JOB_CATALOG, MEMCACHED_IMAGE, NODE_A, NODE_B, JobCatalogEntry
 from .config import JobOverride, PolicyConfig
 
 
@@ -29,20 +29,27 @@ class ResolvedMemcached:
     threads: int
 
 
+@dataclass(frozen=True)
+class ResolvedPrecachePod:
+    kubernetes_name: str
+    node: str
+    images: tuple[str, ...]
+
+
 def _manifest_name(prefix: str, slug: str, run_id: str) -> str:
     base = f"{prefix}-{slug}-{run_id.lower()}"
     return base[:63].rstrip("-")
 
 
 def _resolve_job(catalog_entry: JobCatalogEntry, override: JobOverride | None, run_id: str) -> ResolvedBatchJob:
-    node = override.node if override and override.node else catalog_entry.default_node
-    cores = override.cores if override and override.cores else catalog_entry.default_cores
-    threads = override.threads if override and override.threads else catalog_entry.default_threads
-    cpu_request = override.cpu_request if override and override.cpu_request else catalog_entry.default_cpu_request
+    node = override.node if override and override.node is not None else catalog_entry.default_node
+    cores = override.cores if override and override.cores is not None else catalog_entry.default_cores
+    threads = override.threads if override and override.threads is not None else catalog_entry.default_threads
+    cpu_request = override.cpu_request if override and override.cpu_request is not None else catalog_entry.default_cpu_request
     memory_request = (
-        override.memory_request if override and override.memory_request else catalog_entry.default_memory_request
+        override.memory_request if override and override.memory_request is not None else catalog_entry.default_memory_request
     )
-    memory_limit = override.memory_limit if override and override.memory_limit else catalog_entry.default_memory_limit
+    memory_limit = override.memory_limit if override and override.memory_limit is not None else catalog_entry.default_memory_limit
     return ResolvedBatchJob(
         job_id=catalog_entry.job_id,
         kubernetes_name=_manifest_name("parsec", catalog_entry.job_id, run_id),
@@ -73,6 +80,22 @@ def resolve_memcached(policy: PolicyConfig, run_id: str) -> ResolvedMemcached:
         node=memcached.node,
         cores=memcached.cores,
         threads=memcached.threads,
+    )
+
+
+def resolve_precache_pods(run_id: str) -> tuple[ResolvedPrecachePod, ...]:
+    images = tuple(sorted({entry.image for entry in JOB_CATALOG.values()} | {MEMCACHED_IMAGE}))
+    return (
+        ResolvedPrecachePod(
+            kubernetes_name=_manifest_name("precache", NODE_A, run_id),
+            node=NODE_A,
+            images=images,
+        ),
+        ResolvedPrecachePod(
+            kubernetes_name=_manifest_name("precache", NODE_B, run_id),
+            node=NODE_B,
+            images=images,
+        ),
     )
 
 
@@ -114,13 +137,49 @@ metadata:
     cca-project-role: "memcached"
 spec:
   containers:
-  - image: anakli/memcached:t1
+  - image: {MEMCACHED_IMAGE}
     name: memcached
     imagePullPolicy: Always
     command: ["/bin/sh"]
     args: ["-c", "taskset -c {memcached.cores} ./memcached -t {memcached.threads} -u memcache"]
   nodeSelector:
     cca-project-nodetype: "{memcached.node}"
+"""
+
+
+def render_precache_pod_manifest(
+    pod: ResolvedPrecachePod,
+    *,
+    experiment_id: str,
+    run_id: str,
+) -> str:
+    container_lines: list[str] = []
+    for index, image in enumerate(pod.images, start=1):
+        container_lines.extend(
+            (
+                f"  - image: {image}",
+                f"    name: image-{index:02d}",
+                "    imagePullPolicy: IfNotPresent",
+                '    command: ["/bin/sh"]',
+                '    args: ["-c", "true"]',
+            )
+        )
+    containers_block = "\n".join(container_lines)
+    return f"""apiVersion: v1
+kind: Pod
+metadata:
+  name: {pod.kubernetes_name}
+  labels:
+    cca-project-managed: "true"
+    cca-project-experiment: "{experiment_id}"
+    cca-project-role: "precache"
+    cca-project-precache-run: "{run_id}"
+spec:
+  restartPolicy: Never
+  containers:
+{containers_block}
+  nodeSelector:
+    cca-project-nodetype: "{pod.node}"
 """
 
 
@@ -160,4 +219,3 @@ spec:
       nodeSelector:
         cca-project-nodetype: "{job.node}"
 """
-

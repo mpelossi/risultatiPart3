@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 import threading
@@ -15,13 +16,16 @@ from .config import ExperimentConfig, Phase, PolicyConfig
 from .debug import format_debug_command_hint, summarize_provisioning_hints
 from .manifests import (
     ResolvedBatchJob,
+    ResolvedPrecachePod,
     render_batch_job_manifest,
     render_memcached_manifest,
+    render_precache_pod_manifest,
     resolve_jobs,
     resolve_memcached,
+    resolve_precache_pods,
 )
 from .provision import ProvisioningError, assert_client_provisioning
-from .utils import append_log, ensure_directory, utc_timestamp
+from .utils import append_log, ensure_directory, run_id_timestamp
 
 
 @dataclass
@@ -29,11 +33,19 @@ class MeasurementHandle:
     process: subprocess.Popen[str]
     reader_thread: threading.Thread
     ready_event: threading.Event
+    node_name: str
+    remote_pid_file: str
+    stop_requested: bool = False
 
 
 class ExperimentRunner:
     poll_interval_s = 1.0
     scheduler_status_interval_s = 15.0
+    final_pod_metadata_wait_s = 30.0
+    measurement_stop_int_grace_s = 10.0
+    measurement_stop_term_grace_s = 5.0
+    precache_completion_timeout_s = 900
+    precache_cleanup_timeout_s = 120
 
     def __init__(self, experiment: ExperimentConfig, policy: PolicyConfig):
         self.experiment = experiment
@@ -41,8 +53,16 @@ class ExperimentRunner:
         self.cluster = ClusterController(experiment)
 
     def _create_run_dir(self) -> tuple[str, Path, Path]:
-        run_id = utc_timestamp().lower()
-        run_dir = ensure_directory(self.experiment.results_root / self.experiment.experiment_id / run_id)
+        experiment_root = ensure_directory(self.experiment.results_root / self.experiment.experiment_id)
+        base_run_id = run_id_timestamp()
+        run_id = base_run_id
+        suffix = 2
+        run_dir = experiment_root / run_id
+        while run_dir.exists():
+            run_id = f"{base_run_id}-{suffix:02d}"
+            run_dir = experiment_root / run_id
+            suffix += 1
+        run_dir = ensure_directory(run_dir)
         manifests_dir = ensure_directory(run_dir / "rendered_manifests")
         return run_id, run_dir, manifests_dir
 
@@ -86,6 +106,27 @@ class ExperimentRunner:
             )
         return memcached_path, resolved_jobs
 
+    def _render_precache_manifests(
+        self,
+        *,
+        run_id: str,
+        manifests_dir: Path,
+    ) -> tuple[tuple[Path, ...], tuple[ResolvedPrecachePod, ...]]:
+        precache_pods = resolve_precache_pods(run_id)
+        manifest_paths: list[Path] = []
+        for pod in precache_pods:
+            manifest_path = manifests_dir / f"{pod.kubernetes_name}.yaml"
+            manifest_path.write_text(
+                render_precache_pod_manifest(
+                    pod,
+                    experiment_id=self.experiment.experiment_id,
+                    run_id=run_id,
+                ),
+                encoding="utf-8",
+            )
+            manifest_paths.append(manifest_path)
+        return tuple(manifest_paths), precache_pods
+
     def _phase_plan(self, resolved_jobs: dict[str, ResolvedBatchJob]) -> list[dict[str, object]]:
         return [
             {
@@ -97,6 +138,89 @@ class ExperimentRunner:
             }
             for phase in self.policy.phases
         ]
+
+    def _bash_lc(self, script: str) -> str:
+        return f"bash -lc {shlex.quote(script)}"
+
+    def _measurement_pid_file(self, run_id: str) -> str:
+        return f"/tmp/cca-mcperf-{run_id}.pid"
+
+    def _precache_selector(self, run_id: str) -> str:
+        return f"cca-project-role=precache,cca-project-precache-run={run_id}"
+
+    def _cleanup_precache_manifests(
+        self,
+        *,
+        manifest_paths: tuple[Path, ...],
+        selector: str,
+        log_path: Path,
+    ) -> None:
+        for manifest_path in manifest_paths:
+            self.cluster.delete_manifest(manifest_path)
+        self.cluster.wait_for_pods_deleted(selector, timeout_s=self.precache_cleanup_timeout_s)
+        self._log(log_path, "Pre-cache pods deleted")
+
+    def _precache_images(
+        self,
+        *,
+        run_id: str,
+        manifests_dir: Path,
+        log_path: Path,
+    ) -> None:
+        manifest_paths, precache_pods = self._render_precache_manifests(run_id=run_id, manifests_dir=manifests_dir)
+        selector = self._precache_selector(run_id)
+        expected_names = {pod.kubernetes_name for pod in precache_pods}
+        image_count = len(precache_pods[0].images) if precache_pods else 0
+        self._log(
+            log_path,
+            f"Pre-caching {image_count} images on benchmark nodes via {len(precache_pods)} transient pod(s)",
+        )
+        primary_error: Exception | None = None
+        try:
+            for manifest_path in manifest_paths:
+                self.cluster.apply_manifest(manifest_path)
+            self.cluster.wait_for_pods_completion(
+                selector,
+                expected_names=expected_names,
+                timeout_s=self.precache_completion_timeout_s,
+            )
+            self._log(log_path, "Pre-cache pods completed successfully")
+        except Exception as exc:
+            primary_error = exc
+            raise
+        finally:
+            try:
+                self._cleanup_precache_manifests(
+                    manifest_paths=manifest_paths,
+                    selector=selector,
+                    log_path=log_path,
+                )
+            except Exception as exc:
+                self._log(log_path, f"Warning: failed to clean up pre-cache pods: {exc}")
+                if primary_error is None:
+                    raise
+
+    def _send_measurement_signal(self, handle: MeasurementHandle, signal_name: str) -> None:
+        if handle.process.poll() is not None:
+            return
+        script = "\n".join(
+            [
+                "set -euo pipefail",
+                f"pid_file={shlex.quote(handle.remote_pid_file)}",
+                'if [ ! -s "$pid_file" ]; then',
+                "  exit 0",
+                "fi",
+                'pid="$(cat "$pid_file")"',
+                'if kill -0 "$pid" >/dev/null 2>&1; then',
+                f'  kill -{signal_name} "$pid"',
+                "fi",
+            ]
+        )
+        result = self.cluster.ssh(handle.node_name, self._bash_lc(script), check=False)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to send SIG{signal_name} to the mcperf measurement wrapper: {result.combined_output}"
+            )
 
     def _start_measurement(
         self,
@@ -112,24 +236,81 @@ class ExperimentRunner:
         measurement = self.experiment.measurement
         nodes = self.cluster.discover_nodes()
         measure_node = nodes["client-measure"]
-        command = (
-            "bash -lc 'set -euo pipefail; "
-            f"cd {self.experiment.remote_repo_dir}; "
-            f"./mcperf -s {memcached_ip} --loadonly; "
-            f"./mcperf -s {memcached_ip} "
-            f"-a {agent_a_ip} -a {agent_b_ip} "
-            "--noload "
-            f"-T {measurement.measure_threads} "
-            f"-C {measurement.connections} "
-            f"-D {measurement.depth} "
-            f"-Q {measurement.qps_interval} "
-            f"-c {measurement.connections} "
-            "-t 10 "
-            f"--scan {measurement.scan_start}:{measurement.scan_stop}:{measurement.scan_step}'"
+        remote_pid_file = self._measurement_pid_file(run_id)
+        load_command = shlex.join(["./mcperf", "-s", memcached_ip, "--loadonly"])
+        scan_command = shlex.join(
+            [
+                "./mcperf",
+                "-s",
+                memcached_ip,
+                "-a",
+                agent_a_ip,
+                "-a",
+                agent_b_ip,
+                "--noload",
+                "-T",
+                str(measurement.measure_threads),
+                "-C",
+                str(measurement.connections),
+                "-D",
+                str(measurement.depth),
+                "-Q",
+                str(measurement.qps_interval),
+                "-c",
+                str(measurement.connections),
+                "-t",
+                "10",
+                "--scan",
+                f"{measurement.scan_start}:{measurement.scan_stop}:{measurement.scan_step}",
+            ]
+        )
+        script = "\n".join(
+            [
+                "set -euo pipefail",
+                f"cd {shlex.quote(self.experiment.remote_repo_dir)}",
+                f"pid_file={shlex.quote(remote_pid_file)}",
+                'child_pid=""',
+                "stop_requested=0",
+                'rm -f "$pid_file"',
+                "cleanup() {",
+                '  rm -f "$pid_file"',
+                "}",
+                "forward_stop() {",
+                '  stop_requested=1',
+                '  signal_name="$1"',
+                '  if [ -n "${child_pid:-}" ] && kill -0 "$child_pid" >/dev/null 2>&1; then',
+                '    kill "-$signal_name" "$child_pid" >/dev/null 2>&1 || true',
+                "  fi",
+                "}",
+                "trap cleanup EXIT",
+                "trap 'forward_stop INT' INT",
+                "trap 'forward_stop TERM' TERM",
+                load_command,
+                'echo "$$" > "$pid_file"',
+                "set +e",
+                f"{scan_command} &",
+                'child_pid="$!"',
+                "while true; do",
+                '  wait "$child_pid"',
+                '  status="$?"',
+                '  if [ "$stop_requested" -eq 1 ] && kill -0 "$child_pid" >/dev/null 2>&1; then',
+                "    continue",
+                "  fi",
+                "  break",
+                "done",
+                "set -e",
+                'if [ "$stop_requested" -eq 1 ]; then',
+                "  exit 0",
+                "fi",
+                'if [ "$status" -eq 130 ] || [ "$status" -eq 143 ]; then',
+                "  exit 0",
+                "fi",
+                'exit "$status"',
+            ]
         )
         process = self.cluster.popen_ssh(
             measure_node.name,
-            command,
+            self._bash_lc(script),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
@@ -147,18 +328,96 @@ class ExperimentRunner:
 
         reader_thread = threading.Thread(target=_reader, daemon=True)
         reader_thread.start()
-        return MeasurementHandle(process=process, reader_thread=reader_thread, ready_event=ready_event)
+        return MeasurementHandle(
+            process=process,
+            reader_thread=reader_thread,
+            ready_event=ready_event,
+            node_name=measure_node.name,
+            remote_pid_file=remote_pid_file,
+        )
 
     def _wait_for_measurement_start(self, handle: MeasurementHandle) -> None:
         if not handle.ready_event.wait(timeout=self.experiment.measurement.max_start_wait_s):
             handle.process.terminate()
             raise TimeoutError("mcperf measurement did not become ready in time")
 
-    def _wait_for_measurement_finish(self, handle: MeasurementHandle) -> None:
-        return_code = handle.process.wait(timeout=self.experiment.measurement.completion_timeout_s)
+    def _wait_for_measurement_finish(self, handle: MeasurementHandle, *, timeout_s: float | None = None) -> None:
+        timeout = self.experiment.measurement.completion_timeout_s if timeout_s is None else timeout_s
+        try:
+            return_code = handle.process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            raise TimeoutError(f"mcperf measurement did not finish within {timeout:.1f}s") from exc
         handle.reader_thread.join(timeout=30)
-        if return_code != 0:
+        if return_code != 0 and not handle.stop_requested:
             raise RuntimeError(f"mcperf measurement exited with code {return_code}")
+
+    def _stop_measurement(self, handle: MeasurementHandle, *, log_path: Path) -> None:
+        if handle.process.poll() is not None:
+            return
+        handle.stop_requested = True
+        self._log(log_path, f"Stopping mcperf measurement wrapper on {handle.node_name} with SIGINT")
+        self._send_measurement_signal(handle, "INT")
+        try:
+            self._wait_for_measurement_finish(handle, timeout_s=self.measurement_stop_int_grace_s)
+            return
+        except TimeoutError:
+            self._log(
+                log_path,
+                f"mcperf is still running on {handle.node_name} after SIGINT; escalating to SIGTERM",
+            )
+        self._send_measurement_signal(handle, "TERM")
+        try:
+            self._wait_for_measurement_finish(handle, timeout_s=self.measurement_stop_term_grace_s)
+        except TimeoutError as exc:
+            raise TimeoutError("mcperf measurement did not stop after SIGINT/SIGTERM") from exc
+
+    def _jobs_missing_termination_metadata(
+        self,
+        payload: dict[str, object],
+        *,
+        expected_job_ids: set[str],
+    ) -> list[str]:
+        terminated_job_ids: set[str] = set()
+        for item in payload.get("items", []):
+            metadata = item.get("metadata", {})
+            labels = metadata.get("labels", {})
+            job_id = labels.get("cca-project-job-id")
+            if not isinstance(job_id, str) or job_id not in expected_job_ids:
+                continue
+            container_status = (item.get("status", {}).get("containerStatuses") or [{}])[0]
+            terminated = container_status.get("state", {}).get("terminated", {})
+            if terminated.get("startedAt") and terminated.get("finishedAt"):
+                terminated_job_ids.add(job_id)
+        return sorted(expected_job_ids - terminated_job_ids)
+
+    def _wait_for_final_job_pod_metadata(
+        self,
+        *,
+        run_id: str,
+        expected_job_ids: set[str],
+        log_path: Path,
+    ) -> None:
+        if not expected_job_ids:
+            return
+        self._log(log_path, "Waiting briefly for final pod termination metadata")
+        deadline = self._current_time() + self.final_pod_metadata_wait_s
+        while True:
+            payload = self.cluster.get_run_pods_payload(run_id)
+            missing_job_ids = self._jobs_missing_termination_metadata(
+                payload,
+                expected_job_ids=expected_job_ids,
+            )
+            if not missing_job_ids:
+                return
+            now = self._current_time()
+            if now >= deadline:
+                self._log(
+                    log_path,
+                    "Proceeding with pod snapshot even though termination metadata is still missing for: "
+                    + ", ".join(missing_job_ids),
+                )
+                return
+            self._sleep(min(self.poll_interval_s, max(deadline - now, 0.0)))
 
     def _current_time(self) -> float:
         return time.monotonic()
@@ -309,7 +568,9 @@ class ExperimentRunner:
                     next_status_log_at = now + self.scheduler_status_interval_s
                 self._sleep(min(self.poll_interval_s, max(deadline - self._current_time(), 0.0)))
 
-    def run_once(self, *, dry_run: bool = False) -> Path:
+    def run_once(self, *, dry_run: bool = False, precache: bool = False) -> Path:
+        if dry_run and precache:
+            raise ValueError("--precache cannot be combined with --dry-run")
         run_id, run_dir, manifests_dir = self._create_run_dir()
         log_path = run_dir / "events.log"
         self._log_run_prefix(run_id, f"Preparing run in {run_dir}")
@@ -356,6 +617,9 @@ class ExperimentRunner:
             )
             raise
 
+        if precache:
+            self._precache_images(run_id=run_id, manifests_dir=manifests_dir, log_path=log_path)
+
         self._log(log_path, "Applying memcached manifest")
         self.cluster.apply_manifest(memcached_manifest)
         memcached_name = resolve_memcached(self.policy, run_id).kubernetes_name
@@ -391,11 +655,17 @@ class ExperimentRunner:
             manifests_dir=manifests_dir,
             log_path=log_path,
         )
-        self._log(log_path, "All phases launched; waiting for mcperf to finish")
+        self._log(log_path, "All batch jobs completed; capturing results.json and stopping mcperf")
+        self._wait_for_final_job_pod_metadata(
+            run_id=run_id,
+            expected_job_ids=set(launched_jobs),
+            log_path=log_path,
+        )
+        collect_live_pods(self.cluster, run_dir)
+        self._stop_measurement(measurement, log_path=log_path)
         self._wait_for_measurement_finish(measurement)
 
-        self._log(log_path, "Collecting live pod snapshot and summarizing run")
-        collect_live_pods(self.cluster, run_dir)
+        self._log(log_path, "Summarizing run from captured pod snapshot and mcperf output")
         summary = summarize_run(
             run_dir,
             experiment_id=self.experiment.experiment_id,
@@ -418,12 +688,14 @@ class ExperimentRunner:
         )
         return run_dir
 
-    def run_batch(self, runs: int, *, dry_run: bool = False) -> list[Path]:
+    def run_batch(self, runs: int, *, dry_run: bool = False, precache: bool = False) -> list[Path]:
+        if dry_run and precache:
+            raise ValueError("--precache cannot be combined with --dry-run")
         run_dirs: list[Path] = []
         print(f"Starting batch of {runs} run(s)")
         for index in range(1, runs + 1):
             print(f"Starting run {index}/{runs}")
-            run_dir = self.run_once(dry_run=dry_run)
+            run_dir = self.run_once(dry_run=dry_run, precache=precache and index == 1)
             run_dirs.append(run_dir)
             print(f"Finished run {index}/{runs}: {run_dir}")
         print("Batch complete")

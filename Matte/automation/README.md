@@ -61,6 +61,19 @@ python3 cli.py show --policy schedule.yaml
 python3 cli.py audit --policy schedule.yaml --times-csv ../../Part2summary_times.csv
 ```
 
+If you want to edit the schedule visually, open the planner GUI from this directory with:
+
+```bash
+python3 gui.py
+```
+
+That opens `schedule.yaml` and `../../Part2summary_times.csv` by default. If you want to
+use different files, run:
+
+```bash
+python3 gui.py --policy other-schedule.yaml --times-csv /path/to/Part2summary_times.csv
+```
+
 ### 5. Do a dry run first
 
 ```bash
@@ -70,13 +83,17 @@ python3 cli.py run once --config experiment.yaml --policy schedule.yaml --dry-ru
 ### 6. Run one real experiment
 
 ```bash
-python3 cli.py run once --config experiment.yaml --policy schedule.yaml
+python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache
 ```
+
+`--precache` is recommended before serious benchmark runs. It warms all benchmark and
+memcached images on both benchmark nodes so the measured run does not spend time pulling
+containers.
 
 ### 7. Run three repetitions
 
 ```bash
-python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3
+python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache
 ```
 
 ### 8. See the best run
@@ -104,6 +121,9 @@ That file decides:
 - which cores it uses
 - how many threads it gets
 - when it starts relative to other jobs
+
+The `cores` field accepts any valid Linux CPU-set string that fits on the chosen node, for
+example `0-4`, `5-7`, `1-5`, or `0,2,4`.
 
 Only edit:
 
@@ -232,6 +252,32 @@ Use `audit` to catch:
 - memcached collisions
 - suspicious idle gaps
 
+If you want to edit the schedule in a GUI instead of hand-editing YAML, run:
+
+```bash
+python3 gui.py
+```
+
+or, equivalently:
+
+```bash
+python3 cli.py gui --policy schedule.yaml --times-csv ../../Part2summary_times.csv
+```
+
+How to use the planner correctly:
+- run it from a graphical desktop session; plain headless SSH will not open a Tk window
+- `Reload` re-reads the policy file from disk
+- `Save` validates the schedule first and refuses to write if there are errors
+- the `Threads` spinboxes are loaded from the `threads:` values in the policy file
+- the `Cores` combobox suggests contiguous presets, but you can also type any valid CPU-set
+  string manually
+- after saving, run `python3 cli.py show --policy schedule.yaml` if you want to confirm the
+  exact node/core/thread assignments that will be used
+
+One important detail: the GUI always saves back an explicit policy file with
+`job_overrides` and `phases`. That is still supported by all the automation commands, but
+the file will no longer be in the shorter `jobs:` format after you save from the GUI.
+
 ### Step 5. Dry run
 
 Run:
@@ -247,26 +293,40 @@ This renders manifests and writes the phase plan, but does not touch the live cl
 Run:
 
 ```bash
-python3 cli.py run once --config experiment.yaml --policy schedule.yaml
+python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache
 ```
 
 This:
 - cleans previous managed jobs and pods
 - checks client provisioning
+- optionally pre-pulls all benchmark images on both benchmark nodes
 - launches memcached
 - starts the `mcperf` measurement
 - launches the batch phases in schedule order
-- collects logs and results
+- stops `mcperf` when the last batch job completes
+- captures `results.json`, `mcperf.txt`, and `summary.json`
+
+`--precache` is recommended for serious timing runs. It warms the images once and then
+deletes the transient warmup pods before memcached and the benchmark jobs start.
+
+`results.json` is the raw `kubectl get pods -o json` snapshot that matches the assignment
+workflow. `summary.json` is a derived convenience report built from `results.json` and
+`mcperf.txt`.
+
+When the run stops measurement, the signal is sent only to the temporary `mcperf` wrapper on
+`client-measure`. It does not target the memcached pod or the long-lived
+`mcperf-agent.service` processes on `client-agent-a` / `client-agent-b`.
 
 ### Step 7. Repeated runs
 
 Run:
 
 ```bash
-python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3
+python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache
 ```
 
-Use this when you want the three measurement files needed for submission.
+Use this when you want the three measurement files needed for submission. With `--precache`,
+the warmup happens once before the first run only.
 
 ### Step 8. Pick the best run
 
@@ -281,6 +341,9 @@ This sorts the runs by:
 2. lowest makespan
 3. lowest observed p95
 
+By default it reads from this automation directory's own `runs/` folder, so you usually do
+not need to pass `--results-root`.
+
 ### Step 9. Export the submission folder
 
 Run:
@@ -288,6 +351,9 @@ Run:
 ```bash
 python3 cli.py export submission --experiment part3-handcrafted --group 054 --task 3_1
 ```
+
+The export step reads each selected run's local `results.json`, but writes the submission
+bundle using the assignment filenames `pods_1.json`, `pods_2.json`, `pods_3.json`.
 
 ## What Each Command Does
 
@@ -315,15 +381,21 @@ Prints the current schedule in a human-readable format.
 
 Runs the static schedule checker using your Part 2 timing data.
 
+### `python3 cli.py gui --policy schedule.yaml --times-csv ../../Part2summary_times.csv`
+
+Opens the Tkinter planner GUI for the current schedule. From inside this directory,
+`python3 gui.py` does the same thing with the default `schedule.yaml` and
+`../../Part2summary_times.csv` paths.
+
 ### `python3 cli.py run once --config experiment.yaml --policy schedule.yaml --dry-run`
 
 Builds the manifests and phase plan without touching the cluster.
 
-### `python3 cli.py run once --config experiment.yaml --policy schedule.yaml`
+### `python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache`
 
-Runs one full live experiment.
+Runs one full live experiment. `--precache` is recommended.
 
-### `python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3`
+### `python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache`
 
 Runs the same experiment multiple times.
 
@@ -413,9 +485,20 @@ Use the command types like this:
 - `kubectl exec -it <pod> -- sh` opens a shell inside the container
 - `kubectl logs -f`, `journalctl -f`, and `tail -f` follow live output instead of opening a shell
 
+### `gui.py` does not open a window
+
+The planner is a Tkinter desktop app. It needs:
+- a Python build with Tkinter available
+- a graphical display session
+
+If `python3 gui.py` says Tkinter could not be imported, install the Tkinter package for
+your Python distribution. If it says no graphical display is available, run it locally in
+a desktop session or use X11 forwarding.
+
 ## Important Notes
 
 - The main scheduling file is `schedule.yaml`.
+- `python3 gui.py` opens `schedule.yaml` and `../../Part2summary_times.csv` by default.
 - `run once` does **not** create the cluster for you.
 - `cluster up` is a separate step from `run once`.
 - The Part 2 timing reference file is `../../Part2summary_times.csv` from this folder.

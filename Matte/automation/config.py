@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .catalog import JOB_CATALOG, NODE_A, NODE_B, count_cores
+from .catalog import JOB_CATALOG, NODE_A, NODE_B, validate_node_core_spec
 from .utils import expand_path
 
 
@@ -211,16 +211,15 @@ def _job_override_from_simple_schedule(job_id: str, raw: Any) -> JobOverride:
 
 def _validate_job_override(job_id: str, override: JobOverride) -> None:
     catalog_entry = JOB_CATALOG[job_id]
-    node = override.node or catalog_entry.default_node
+    node = override.node if override.node is not None else catalog_entry.default_node
     if node not in (NODE_A, NODE_B):
         raise ValueError(f"{job_id} uses unsupported node: {node}")
-    cores = override.cores or catalog_entry.default_cores
-    if cores not in catalog_entry.allowed_cores_by_node[node]:
-        raise ValueError(f"{job_id} uses unsupported core set {cores} on {node}")
-    threads = override.threads or catalog_entry.default_threads
+    cores = override.cores if override.cores is not None else catalog_entry.default_cores
+    core_ids = validate_node_core_spec(cores, node)
+    threads = override.threads if override.threads is not None else catalog_entry.default_threads
     if threads <= 0:
         raise ValueError(f"{job_id} must use at least one thread")
-    if threads > count_cores(cores):
+    if threads > len(core_ids):
         raise ValueError(f"{job_id} threads ({threads}) exceed pinned cores ({cores})")
 
 
@@ -343,7 +342,8 @@ def load_policy_config(path_str: str) -> PolicyConfig:
     )
     if memcached.node not in (NODE_A, NODE_B):
         raise ValueError(f"Unsupported memcached node: {memcached.node}")
-    if memcached.threads > count_cores(memcached.cores):
+    memcached_core_ids = validate_node_core_spec(memcached.cores, memcached.node)
+    if memcached.threads > len(memcached_core_ids):
         raise ValueError("memcached threads exceed pinned cores")
 
     if "jobs" in raw and "phases" not in raw:

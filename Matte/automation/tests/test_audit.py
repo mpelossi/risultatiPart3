@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from part3.automation.audit import (
+from Matte.automation.audit import (
     AuditJob,
     AuditMemcached,
     audit_schedule,
@@ -13,8 +13,8 @@ from part3.automation.audit import (
     load_runtime_table,
     serialize_policy_document,
 )
-from part3.automation.catalog import NODE_A, NODE_B
-from part3.automation.gui import build_model_from_planner_state, planner_state_from_model
+from Matte.automation.catalog import NODE_A, NODE_B
+from Matte.automation.gui import build_model_from_planner_state, planner_state_from_model
 
 
 ROOT = Path("/home/carti/ETH/Msc/CCA")
@@ -131,14 +131,46 @@ class AuditTests(unittest.TestCase):
         jobs["barnes"] = AuditJob(
             job_id="barnes",
             node=NODE_A,
-            cores="1-5",
+            cores="0-3,2-4",
             threads=5,
             dependencies=(),
             delay_s=0,
             order=2,
         )
         report = audit_schedule(self._build_model(jobs), self.runtime_table)
-        self.assertTrue(any("unsupported core set 1-5 on node-a-8core" in issue.message for issue in report.errors))
+        self.assertTrue(any("duplicate or overlapping core 2" in issue.message for issue in report.errors))
+
+    def test_accepts_arbitrary_valid_core_specs(self) -> None:
+        jobs = _base_jobs()
+        jobs["blackscholes"] = AuditJob(
+            job_id="blackscholes",
+            node=NODE_A,
+            cores="0,2,4",
+            threads=3,
+            dependencies=(),
+            delay_s=0,
+            order=1,
+        )
+        jobs["barnes"] = AuditJob(
+            job_id="barnes",
+            node=NODE_A,
+            cores="5-7",
+            threads=3,
+            dependencies=(),
+            delay_s=0,
+            order=2,
+        )
+        jobs["streamcluster"] = AuditJob(
+            job_id="streamcluster",
+            node=NODE_A,
+            cores="1-5",
+            threads=5,
+            dependencies=("blackscholes", "barnes"),
+            delay_s=0,
+            order=3,
+        )
+        report = audit_schedule(self._build_model(jobs), self.runtime_table)
+        self.assertFalse(report.errors)
 
     def test_reports_idle_gaps_as_warnings_only(self) -> None:
         jobs = _base_jobs()
@@ -165,6 +197,27 @@ class PlannerRoundTripTests(unittest.TestCase):
         self.assertIn("job_overrides", payload)
         self.assertIn("phases", payload)
         self.assertEqual(payload["phases"][0]["launch"], ["blackscholes", "barnes", "freqmine"])
+
+    def test_round_trip_preserves_custom_core_specs(self) -> None:
+        jobs = _base_jobs()
+        jobs["blackscholes"] = AuditJob(
+            job_id="blackscholes",
+            node=NODE_A,
+            cores="0,2,4",
+            threads=3,
+            dependencies=(),
+            delay_s=0,
+            order=1,
+        )
+        model = build_schedule_model(
+            policy_name="planner-test",
+            memcached=AuditMemcached(node=NODE_B, cores="0", threads=1),
+            jobs=jobs,
+        )
+        planner_state = planner_state_from_model(model)
+        rebuilt_model = build_model_from_planner_state(planner_state)
+
+        self.assertEqual(rebuilt_model.jobs["blackscholes"].cores, "0,2,4")
 
     def _base_model(self):
         return build_schedule_model(

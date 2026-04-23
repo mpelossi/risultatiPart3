@@ -2,40 +2,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .cpu_sets import contiguous_core_sets, validate_core_spec
+
 
 NODE_A = "node-a-8core"
 NODE_B = "node-b-4core"
+MEMCACHED_IMAGE = "anakli/memcached:t1"
 
-NODE_A_CORE_SETS = (
-    "0-7",
-    "0-3",
-    "4-7",
-    "0-1",
-    "2-3",
-    "4-5",
-    "6-7",
-    "0",
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-)
+NODE_CORE_COUNTS = {
+    NODE_A: 8,
+    NODE_B: 4,
+}
 
-NODE_B_CORE_SETS = (
-    "0-3",
-    "1-3",
-    "0-2",
-    "1-2",
-    "2-3",
-    "0-1",
-    "0",
-    "1",
-    "2",
-    "3",
-)
+NODE_A_CORE_PRESETS = contiguous_core_sets(NODE_CORE_COUNTS[NODE_A])
+NODE_B_CORE_PRESETS = contiguous_core_sets(NODE_CORE_COUNTS[NODE_B])
+
+NODE_CORE_PRESETS = {
+    NODE_A: NODE_A_CORE_PRESETS,
+    NODE_B: NODE_B_CORE_PRESETS,
+}
 
 
 @dataclass(frozen=True)
@@ -47,31 +32,25 @@ class JobCatalogEntry:
     default_node: str
     default_cores: str
     default_threads: int
-    allowed_cores_by_node: dict[str, tuple[str, ...]]
+    suggested_cores_by_node: dict[str, tuple[str, ...]]
     default_cpu_request: str | None = None
     default_memory_request: str | None = None
     default_memory_limit: str | None = None
 
 
-def count_cores(core_spec: str) -> int:
-    total = 0
-    for part in core_spec.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "-" in part:
-            start_text, end_text = part.split("-", 1)
-            start = int(start_text)
-            end = int(end_text)
-            if end < start:
-                raise ValueError(f"Invalid core range: {core_spec}")
-            total += (end - start) + 1
-        else:
-            int(part)
-            total += 1
-    if total <= 0:
-        raise ValueError(f"Invalid core set: {core_spec}")
-    return total
+def suggested_core_sets(node: str) -> tuple[str, ...]:
+    if node not in NODE_CORE_PRESETS:
+        raise ValueError(f"Unsupported node: {node}")
+    return NODE_CORE_PRESETS[node]
+
+
+def validate_node_core_spec(core_spec: str, node: str) -> tuple[int, ...]:
+    if node not in NODE_CORE_COUNTS:
+        raise ValueError(f"Unsupported node: {node}")
+    try:
+        return validate_core_spec(core_spec, max_core_id=NODE_CORE_COUNTS[node] - 1)
+    except ValueError as exc:
+        raise ValueError(f"Invalid core set {core_spec} on {node}: {exc}") from exc
 
 
 JOB_CATALOG: dict[str, JobCatalogEntry] = {
@@ -83,7 +62,7 @@ JOB_CATALOG: dict[str, JobCatalogEntry] = {
         default_node=NODE_A,
         default_cores="0-7",
         default_threads=8,
-        allowed_cores_by_node={NODE_A: NODE_A_CORE_SETS, NODE_B: NODE_B_CORE_SETS},
+        suggested_cores_by_node={NODE_A: NODE_A_CORE_PRESETS, NODE_B: NODE_B_CORE_PRESETS},
     ),
     "blackscholes": JobCatalogEntry(
         job_id="blackscholes",
@@ -93,7 +72,7 @@ JOB_CATALOG: dict[str, JobCatalogEntry] = {
         default_node=NODE_B,
         default_cores="1-3",
         default_threads=3,
-        allowed_cores_by_node={NODE_A: NODE_A_CORE_SETS, NODE_B: NODE_B_CORE_SETS},
+        suggested_cores_by_node={NODE_A: NODE_A_CORE_PRESETS, NODE_B: NODE_B_CORE_PRESETS},
     ),
     "canneal": JobCatalogEntry(
         job_id="canneal",
@@ -103,7 +82,7 @@ JOB_CATALOG: dict[str, JobCatalogEntry] = {
         default_node=NODE_A,
         default_cores="0-7",
         default_threads=8,
-        allowed_cores_by_node={NODE_A: NODE_A_CORE_SETS, NODE_B: NODE_B_CORE_SETS},
+        suggested_cores_by_node={NODE_A: NODE_A_CORE_PRESETS, NODE_B: NODE_B_CORE_PRESETS},
     ),
     "freqmine": JobCatalogEntry(
         job_id="freqmine",
@@ -113,7 +92,7 @@ JOB_CATALOG: dict[str, JobCatalogEntry] = {
         default_node=NODE_B,
         default_cores="1-3",
         default_threads=3,
-        allowed_cores_by_node={NODE_A: NODE_A_CORE_SETS, NODE_B: NODE_B_CORE_SETS},
+        suggested_cores_by_node={NODE_A: NODE_A_CORE_PRESETS, NODE_B: NODE_B_CORE_PRESETS},
     ),
     "radix": JobCatalogEntry(
         job_id="radix",
@@ -123,7 +102,7 @@ JOB_CATALOG: dict[str, JobCatalogEntry] = {
         default_node=NODE_A,
         default_cores="0-7",
         default_threads=8,
-        allowed_cores_by_node={NODE_A: NODE_A_CORE_SETS, NODE_B: NODE_B_CORE_SETS},
+        suggested_cores_by_node={NODE_A: NODE_A_CORE_PRESETS, NODE_B: NODE_B_CORE_PRESETS},
     ),
     "streamcluster": JobCatalogEntry(
         job_id="streamcluster",
@@ -133,7 +112,7 @@ JOB_CATALOG: dict[str, JobCatalogEntry] = {
         default_node=NODE_A,
         default_cores="0-7",
         default_threads=8,
-        allowed_cores_by_node={NODE_A: NODE_A_CORE_SETS, NODE_B: NODE_B_CORE_SETS},
+        suggested_cores_by_node={NODE_A: NODE_A_CORE_PRESETS, NODE_B: NODE_B_CORE_PRESETS},
     ),
     "vips": JobCatalogEntry(
         job_id="vips",
@@ -143,7 +122,6 @@ JOB_CATALOG: dict[str, JobCatalogEntry] = {
         default_node=NODE_A,
         default_cores="0-7",
         default_threads=8,
-        allowed_cores_by_node={NODE_A: NODE_A_CORE_SETS, NODE_B: NODE_B_CORE_SETS},
+        suggested_cores_by_node={NODE_A: NODE_A_CORE_PRESETS, NODE_B: NODE_B_CORE_PRESETS},
     ),
 }
-

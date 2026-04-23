@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from part3.automation.config import load_policy_config
-from part3.automation.manifests import render_batch_job_manifest, resolve_jobs
+from Matte.automation.config import load_policy_config
+from Matte.automation.manifests import render_batch_job_manifest, resolve_jobs
 
 
 class ManifestTests(unittest.TestCase):
     def test_splash_jobs_render_with_splash_suite(self) -> None:
-        policy = load_policy_config("/home/carti/ETH/Msc/CCA/part3/automation/policies/baseline.yaml")
+        policy = load_policy_config("/home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/policies/baseline.yaml")
         jobs = resolve_jobs(policy, "testrun")
         barnes_manifest = render_batch_job_manifest(jobs["barnes"], experiment_id="exp", run_id="testrun")
         radix_manifest = render_batch_job_manifest(jobs["radix"], experiment_id="exp", run_id="testrun")
@@ -18,7 +18,7 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("-S splash2x -p radix", radix_manifest)
 
     def test_parsec_jobs_render_with_parsec_suite(self) -> None:
-        policy = load_policy_config("/home/carti/ETH/Msc/CCA/part3/automation/policies/baseline.yaml")
+        policy = load_policy_config("/home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/policies/baseline.yaml")
         jobs = resolve_jobs(policy, "testrun")
         manifest = render_batch_job_manifest(jobs["blackscholes"], experiment_id="exp", run_id="testrun")
         self.assertIn("anakli/cca:parsec_blackscholes", manifest)

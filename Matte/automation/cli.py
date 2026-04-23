@@ -29,6 +29,10 @@ from .runner import ExperimentRunner
 from .manifests import resolve_jobs
 
 
+def _default_results_root() -> Path:
+    return Path(__file__).resolve().parent / "runs"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Part 3 Python orchestrator")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -58,11 +62,13 @@ def _build_parser() -> argparse.ArgumentParser:
     run_once.add_argument("--config", required=True)
     run_once.add_argument("--policy", required=True)
     run_once.add_argument("--dry-run", action="store_true")
+    run_once.add_argument("--precache", action="store_true")
     run_batch = run_sub.add_parser("batch")
     run_batch.add_argument("--config", required=True)
     run_batch.add_argument("--policy", required=True)
     run_batch.add_argument("--runs", type=int, default=3)
     run_batch.add_argument("--dry-run", action="store_true")
+    run_batch.add_argument("--precache", action="store_true")
 
     collect_parser = subparsers.add_parser("collect")
     collect_parser.add_argument("--config", required=True)
@@ -85,7 +91,7 @@ def _build_parser() -> argparse.ArgumentParser:
     results_sub = results_parser.add_subparsers(dest="results_command", required=True)
     results_best = results_sub.add_parser("best")
     results_best.add_argument("--experiment", required=True)
-    results_best.add_argument("--results-root", default="part3/automation/runs")
+    results_best.add_argument("--results-root", default=str(_default_results_root()))
 
     export_parser = subparsers.add_parser("export")
     export_sub = export_parser.add_subparsers(dest="export_command", required=True)
@@ -93,7 +99,7 @@ def _build_parser() -> argparse.ArgumentParser:
     export_submission_parser.add_argument("--experiment", required=True)
     export_submission_parser.add_argument("--group", required=True)
     export_submission_parser.add_argument("--task", required=True)
-    export_submission_parser.add_argument("--results-root", default="part3/automation/runs")
+    export_submission_parser.add_argument("--results-root", default=str(_default_results_root()))
     export_submission_parser.add_argument("--output-root", default=".")
     export_submission_parser.add_argument("--run-id", action="append", dest="run_ids")
 
@@ -152,14 +158,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run":
+        if args.dry_run and args.precache:
+            parser.error("--precache cannot be combined with --dry-run")
         experiment = load_experiment_config(args.config)
         policy = load_policy_config(args.policy)
         runner = ExperimentRunner(experiment, policy)
         if args.run_command == "once":
-            run_dir = runner.run_once(dry_run=args.dry_run)
+            run_dir = runner.run_once(dry_run=args.dry_run, precache=args.precache)
             print(run_dir)
         else:
-            run_dirs = runner.run_batch(args.runs, dry_run=args.dry_run)
+            run_dirs = runner.run_batch(args.runs, dry_run=args.dry_run, precache=args.precache)
             for run_dir in run_dirs:
                 print(run_dir)
         return 0
@@ -226,8 +234,13 @@ def main(argv: list[str] | None = None) -> int:
             print("No completed run summaries found.")
             return 0
         for summary in summaries:
+            run_id = summary.get("run_id")
+            run_label = summary.get("run_label")
+            run_display = str(run_id)
+            if run_label and run_label != run_id:
+                run_display = f"{run_id} ({run_label})"
             print(
-                summary.get("run_id"),
+                run_display,
                 summary.get("policy_name"),
                 summary.get("overall_status"),
                 f"makespan={summary.get('makespan_s')}",

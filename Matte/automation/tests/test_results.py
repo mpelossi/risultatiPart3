@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from part3.automation.results import sort_best_runs
+from Matte.automation.results import sort_best_runs
 
 
 class ResultsTests(unittest.TestCase):

@@ -4,13 +4,13 @@ from pathlib import Path
 
 from .cluster import ClusterController
 from .metrics import build_summary
-from .utils import write_json
+from .utils import resolve_existing_run_results_path, run_results_path, write_json
 
 
 def collect_live_pods(cluster: ClusterController, run_dir: Path) -> Path:
-    pods_path = run_dir / "pods.json"
-    cluster.capture_pods_json(pods_path)
-    return pods_path
+    results_path = run_results_path(run_dir)
+    cluster.capture_pods_json(results_path)
+    return results_path
 
 
 def summarize_run(
@@ -21,7 +21,7 @@ def summarize_run(
     run_id: str,
     expected_jobs: set[str],
 ) -> dict[str, object]:
-    pods_path = run_dir / "pods.json"
+    pods_path = resolve_existing_run_results_path(run_dir)
     mcperf_path = run_dir / "mcperf.txt"
     summary = build_summary(
         pods_path,
@@ -47,4 +47,3 @@ def collect_describes(
     for job_id, job_summary in summary["jobs"].items():
         if job_summary.get("status") != "completed":
             cluster.describe_job(job_name_map[job_id], describe_dir / f"{job_id}.txt")
-

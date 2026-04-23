@@ -30,6 +30,9 @@ CANONICAL_NODETYPES = (
 
 
 class ClusterController:
+    kubectl_read_retry_attempts = 4
+    kubectl_read_retry_delay_s = 3.0
+
     def __init__(self, config: ExperimentConfig):
         self.config = config
 
@@ -52,8 +55,41 @@ class ClusterController:
         print(f"[cluster] {message}")
 
     def kubectl_json(self, *args: str) -> dict[str, object]:
-        result = self.kubectl(*args)
-        return json.loads(result.stdout)
+        command_text = "kubectl " + " ".join(args)
+        last_output = ""
+        for attempt in range(1, self.kubectl_read_retry_attempts + 1):
+            result = self.kubectl(*args, check=False)
+            if result.returncode == 0:
+                return json.loads(result.stdout)
+            last_output = result.combined_output
+            if attempt >= self.kubectl_read_retry_attempts or not self._is_transient_kubectl_read_error(last_output):
+                break
+            self._announce(
+                f"Transient Kubernetes API read failure for `{command_text}`; "
+                f"retrying in {self.kubectl_read_retry_delay_s:.1f}s "
+                f"(attempt {attempt}/{self.kubectl_read_retry_attempts})"
+            )
+            time.sleep(self.kubectl_read_retry_delay_s)
+        raise RuntimeError(
+            "Kubernetes API connectivity was lost during a read command "
+            f"({command_text}):\n{last_output}"
+        )
+
+    def _is_transient_kubectl_read_error(self, output: str) -> bool:
+        lowered = output.lower()
+        stripped = lowered.strip()
+        if stripped == "eof" or stripped.endswith(": eof"):
+            return True
+        return any(
+            snippet in lowered
+            for snippet in (
+                "unable to connect to the server",
+                "network is unreachable",
+                "no route to host",
+                "i/o timeout",
+                "tls handshake timeout",
+            )
+        )
 
     def cluster_exists(self) -> bool:
         result = self.kops("get", "cluster", "--name", self.config.cluster_name, check=False)
@@ -298,6 +334,87 @@ class ClusterController:
     def apply_manifest(self, manifest_path: Path) -> None:
         self.kubectl("apply", "-f", str(manifest_path))
 
+    def delete_manifest(self, manifest_path: Path) -> None:
+        self.kubectl("delete", "-f", str(manifest_path), "--ignore-not-found=true", check=False)
+
+    def get_pods_payload_by_selector(self, selector: str) -> dict[str, object]:
+        return self.kubectl_json("get", "pods", "-l", selector, "-o", "json")
+
+    def _pod_failure_message(self, item: dict[str, object]) -> str | None:
+        metadata = item.get("metadata", {})
+        status = item.get("status", {})
+        pod_name = metadata.get("name", "<unknown>")
+        phase = status.get("phase")
+        container_statuses = status.get("containerStatuses") or []
+        for container_status in container_statuses:
+            container_name = container_status.get("name", "<unknown>")
+            state = container_status.get("state", {})
+            waiting = state.get("waiting", {})
+            reason = waiting.get("reason")
+            message = waiting.get("message", "")
+            if reason in {"ErrImagePull", "ImagePullBackOff"}:
+                suffix = f": {message}" if isinstance(message, str) and message else ""
+                return f"Image pull failed for pod/{pod_name} container {container_name} ({reason}){suffix}"
+            terminated = state.get("terminated", {})
+            exit_code = terminated.get("exitCode")
+            if isinstance(exit_code, int) and exit_code != 0:
+                reason_text = terminated.get("reason")
+                message_text = terminated.get("message")
+                details = []
+                if isinstance(reason_text, str) and reason_text:
+                    details.append(reason_text)
+                if isinstance(message_text, str) and message_text:
+                    details.append(message_text)
+                suffix = f" ({'; '.join(details)})" if details else ""
+                return f"Precache pod/{pod_name} container {container_name} exited with code {exit_code}{suffix}"
+        if phase == "Failed":
+            reason = status.get("reason")
+            message = status.get("message")
+            details = [detail for detail in (reason, message) if isinstance(detail, str) and detail]
+            suffix = f" ({'; '.join(details)})" if details else ""
+            return f"Precache pod/{pod_name} failed{suffix}"
+        return None
+
+    def wait_for_pods_completion(
+        self,
+        selector: str,
+        *,
+        expected_names: set[str],
+        timeout_s: int = 600,
+    ) -> None:
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            payload = self.get_pods_payload_by_selector(selector)
+            pods_by_name: dict[str, dict[str, object]] = {}
+            for item in payload.get("items", []):
+                metadata = item.get("metadata", {})
+                pod_name = metadata.get("name")
+                if isinstance(pod_name, str) and pod_name:
+                    pods_by_name[pod_name] = item
+            for item in pods_by_name.values():
+                failure = self._pod_failure_message(item)
+                if failure is not None:
+                    raise RuntimeError(failure)
+            missing = sorted(expected_names - set(pods_by_name))
+            if not missing and all(
+                item.get("status", {}).get("phase") == "Succeeded" for item in pods_by_name.values()
+            ):
+                return
+            time.sleep(2)
+        raise TimeoutError(
+            "Timed out waiting for pods to complete: "
+            + ", ".join(sorted(expected_names))
+        )
+
+    def wait_for_pods_deleted(self, selector: str, *, timeout_s: int = 120) -> None:
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            payload = self.get_pods_payload_by_selector(selector)
+            if not payload.get("items"):
+                return
+            time.sleep(2)
+        raise TimeoutError(f"Timed out waiting for pods with selector {selector} to disappear")
+
     def cleanup_managed_workloads(self) -> None:
         self._announce("Deleting previous managed jobs and pods")
         self.kubectl("delete", "jobs", "-l", "cca-project-managed=true", "--ignore-not-found=true", check=False)
@@ -367,6 +484,16 @@ class ClusterController:
                 snapshots[job_name] = self._job_snapshot_from_payload(item)
         return snapshots
 
+    def get_run_pods_payload(self, run_id: str) -> dict[str, object]:
+        return self.kubectl_json(
+            "get",
+            "pods",
+            "-l",
+            f"cca-project-run-id={run_id}",
+            "-o",
+            "json",
+        )
+
     def get_jobs_snapshot(self, job_names: Iterable[str]) -> dict[str, dict[str, object]]:
         snapshots: dict[str, dict[str, object]] = {}
         for job_name in job_names:
@@ -391,8 +518,8 @@ class ClusterController:
         raise TimeoutError(f"Timed out waiting for jobs: {job_names}")
 
     def capture_pods_json(self, destination: Path) -> None:
-        result = self.kubectl("get", "pods", "-o", "json")
-        destination.write_text(result.stdout, encoding="utf-8")
+        payload = self.kubectl_json("get", "pods", "-o", "json")
+        destination.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
     def describe_job(self, job_name: str, destination: Path) -> None:
         result = self.kubectl("describe", "job", job_name, check=False)

@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 from typing import Any
+
+if __package__ in {None, ""}:
+    package_dir = Path(__file__).resolve().parent
+    package_parent = package_dir.parent
+    if str(package_parent) not in sys.path:
+        sys.path.insert(0, str(package_parent))
+    __package__ = package_dir.name
 
 try:
     import tkinter as tk
@@ -28,7 +37,7 @@ from .audit import (
     parse_dependency_text,
     write_policy_document,
 )
-from .catalog import JOB_CATALOG, NODE_A, NODE_A_CORE_SETS, NODE_B, NODE_B_CORE_SETS
+from .catalog import JOB_CATALOG, NODE_A, NODE_B, suggested_core_sets, validate_node_core_spec
 
 
 TIMELINE_COLORS = (
@@ -41,6 +50,9 @@ TIMELINE_COLORS = (
     "#a6761d",
     "#1f78b4",
 )
+
+DEFAULT_POLICY_PATH = Path(__file__).resolve().with_name("schedule.yaml")
+DEFAULT_TIMES_CSV_PATH = Path(__file__).resolve().parents[2] / "Part2summary_times.csv"
 
 
 @dataclass(frozen=True)
@@ -270,17 +282,27 @@ class PlannerApp:
 
     def _update_memcached_core_values(self) -> None:
         node = self.memcached_node_var.get() or NODE_B
-        values = NODE_A_CORE_SETS if node == NODE_A else NODE_B_CORE_SETS
+        values = suggested_core_sets(node)
         self.memcached_cores_box.configure(values=values)
-        if self.memcached_cores_var.get() not in values:
+        current_value = self.memcached_cores_var.get().strip()
+        try:
+            is_valid = bool(current_value) and bool(validate_node_core_spec(current_value, node))
+        except ValueError:
+            is_valid = False
+        if not is_valid:
             self.memcached_cores_var.set(values[0])
 
     def _update_job_core_values(self, job_id: str) -> None:
         widgets = self.job_rows[job_id]
         node = widgets.node_var.get() or JOB_CATALOG[job_id].default_node
-        values = JOB_CATALOG[job_id].allowed_cores_by_node[node]
+        values = JOB_CATALOG[job_id].suggested_cores_by_node[node]
         widgets.cores_box.configure(values=values)
-        if widgets.cores_var.get() not in values:
+        current_value = widgets.cores_var.get().strip()
+        try:
+            is_valid = bool(current_value) and bool(validate_node_core_spec(current_value, node))
+        except ValueError:
+            is_valid = False
+        if not is_valid:
             widgets.cores_var.set(values[0])
 
     def _safe_int(self, raw: str, fallback: int) -> int:
@@ -469,3 +491,32 @@ def launch_planner_gui(*, policy_path_str: str, times_csv_path_str: str) -> None
         raise RuntimeError("Tkinter GUI could not start. Make sure a graphical display is available.") from exc
     PlannerApp(root, policy_path=policy_path, times_csv_path=times_csv_path)
     root.mainloop()
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Launch the Part 3 schedule planner GUI")
+    parser.add_argument(
+        "--policy",
+        default=str(DEFAULT_POLICY_PATH),
+        help="Path to the schedule or policy file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--times-csv",
+        default=str(DEFAULT_TIMES_CSV_PATH),
+        help="Path to the Part 2 runtime CSV (default: %(default)s)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    try:
+        launch_planner_gui(policy_path_str=args.policy, times_csv_path_str=args.times_csv)
+    except RuntimeError as exc:
+        parser.exit(1, f"{exc}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

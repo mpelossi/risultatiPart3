@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .catalog import JOB_CATALOG, NODE_A, NODE_B, count_cores
+from .catalog import JOB_CATALOG, NODE_A, NODE_B, validate_node_core_spec
 from .config import (
     _load_structured_file,
     _require_int,
@@ -93,27 +93,6 @@ class AuditReport:
         if self.warnings:
             return "warning"
         return "ok"
-
-
-def expand_core_spec(core_spec: str) -> tuple[int, ...]:
-    core_ids: list[int] = []
-    for part in core_spec.split(","):
-        token = part.strip()
-        if not token:
-            continue
-        if "-" in token:
-            start_text, end_text = token.split("-", 1)
-            start = int(start_text)
-            end = int(end_text)
-            if end < start:
-                raise ValueError(f"Invalid core range: {core_spec}")
-            core_ids.extend(range(start, end + 1))
-        else:
-            core_ids.append(int(token))
-    if not core_ids:
-        raise ValueError(f"Invalid core set: {core_spec}")
-    return tuple(sorted(set(core_ids)))
-
 
 def dependency_text(dependencies: tuple[str, ...]) -> str:
     if not dependencies:
@@ -319,31 +298,20 @@ def _validate_core_assignment(
     node: str,
     cores: str,
     threads: int,
-    allowed_cores: tuple[str, ...],
     errors: list[AuditIssue],
 ) -> tuple[int, ...] | None:
     if node not in (NODE_A, NODE_B):
         errors.append(AuditIssue(level="error", message=f"{label} uses unsupported node: {node}", jobs=(label,)))
         return None
-    if cores not in allowed_cores:
-        errors.append(
-            AuditIssue(
-                level="error",
-                message=f"{label} uses unsupported core set {cores} on {node}",
-                node=node,
-                jobs=(label,),
-            )
-        )
-        return None
     try:
-        core_ids = expand_core_spec(cores)
+        core_ids = validate_node_core_spec(cores, node)
     except ValueError as exc:
         errors.append(AuditIssue(level="error", message=str(exc), node=node, jobs=(label,)))
         return None
     if threads <= 0:
         errors.append(AuditIssue(level="error", message=f"{label} must use at least one thread", node=node, jobs=(label,)))
         return None
-    if threads > count_cores(cores):
+    if threads > len(core_ids):
         errors.append(
             AuditIssue(
                 level="error",
@@ -416,15 +384,13 @@ def audit_schedule(model: ScheduleModel, runtime_table: RuntimeTable) -> AuditRe
 
     job_core_ids: dict[str, tuple[int, ...]] = {}
     for job_id, job in model.jobs.items():
-        catalog_entry = JOB_CATALOG.get(job_id)
-        if catalog_entry is None:
+        if job_id not in JOB_CATALOG:
             continue
         core_ids = _validate_core_assignment(
             label=job_id,
             node=job.node,
             cores=job.cores,
             threads=job.threads,
-            allowed_cores=catalog_entry.allowed_cores_by_node.get(job.node, ()),
             errors=errors,
         )
         if core_ids is not None:
@@ -450,13 +416,11 @@ def audit_schedule(model: ScheduleModel, runtime_table: RuntimeTable) -> AuditRe
         )
         memcached_cores: tuple[int, ...] | None = None
     else:
-        memcached_allowed_cores = JOB_CATALOG["barnes"].allowed_cores_by_node[model.memcached.node]
         memcached_cores = _validate_core_assignment(
             label="memcached",
             node=model.memcached.node,
             cores=model.memcached.cores,
             threads=model.memcached.threads,
-            allowed_cores=memcached_allowed_cores,
             errors=errors,
         )
 

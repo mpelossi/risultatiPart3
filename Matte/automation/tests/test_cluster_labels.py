@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import copy
+import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from Matte.automation.cluster import ClusterController
 from Matte.automation.config import ExperimentConfig, MeasurementConfig
@@ -63,6 +65,19 @@ class FakeClusterController(ClusterController):
             self.label_calls.append(args)
             return CommandResult(args=list(args), returncode=0, stdout="", stderr="")
         raise AssertionError(f"Unexpected kubectl call: {args}")
+
+
+class RetryingClusterController(ClusterController):
+    def __init__(self, responses: list[CommandResult]):
+        super().__init__(_experiment_config())
+        self.responses = list(responses)
+        self.calls: list[tuple[str, ...]] = []
+
+    def kubectl(self, *args: str, check: bool = True) -> CommandResult:
+        self.calls.append(args)
+        if not self.responses:
+            raise AssertionError("No more fake kubectl responses configured")
+        return self.responses.pop(0)
 
 
 class ClusterLabelRepairTests(unittest.TestCase):
@@ -144,6 +159,48 @@ class ClusterLabelRepairTests(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_kubectl_json_retries_transient_connectivity_failures(self) -> None:
+        cluster = RetryingClusterController(
+            [
+                CommandResult(
+                    args=["kubectl", "get", "jobs", "-o", "json"],
+                    returncode=1,
+                    stdout="",
+                    stderr="Unable to connect to the server: dial tcp 34.77.122.98:443: connect: network is unreachable",
+                ),
+                CommandResult(
+                    args=["kubectl", "get", "jobs", "-o", "json"],
+                    returncode=0,
+                    stdout=json.dumps({"items": []}),
+                    stderr="",
+                ),
+            ]
+        )
+
+        with patch("Matte.automation.cluster.time.sleep"):
+            payload = cluster.kubectl_json("get", "jobs", "-o", "json")
+
+        self.assertEqual(payload, {"items": []})
+        self.assertEqual(cluster.calls, [("get", "jobs", "-o", "json"), ("get", "jobs", "-o", "json")])
+
+    def test_kubectl_json_raises_clear_error_after_retry_budget(self) -> None:
+        attempts = ClusterController.kubectl_read_retry_attempts
+        cluster = RetryingClusterController(
+            [
+                CommandResult(
+                    args=["kubectl", "get", "jobs", "-o", "json"],
+                    returncode=1,
+                    stdout="",
+                    stderr="Unable to connect to the server: dial tcp 34.77.122.98:443: connect: network is unreachable",
+                )
+                for _ in range(attempts)
+            ]
+        )
+
+        with patch("Matte.automation.cluster.time.sleep"):
+            with self.assertRaisesRegex(RuntimeError, "Kubernetes API connectivity was lost"):
+                cluster.kubectl_json("get", "jobs", "-o", "json")
 
 
 if __name__ == "__main__":
