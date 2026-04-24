@@ -170,6 +170,8 @@ class ViewerDataTests(unittest.TestCase):
             self.assertTrue(run["timeline"]["has_data"])
             self.assertEqual(run["run_label"], "2026-04-23 16:42:02 CEST")
             self.assertEqual(run["timestamp_iso"], "2026-04-23T16:42:02+02:00")
+            self.assertEqual(run["jobs"]["streamcluster"]["planned_cores"], JOB_CATALOG["streamcluster"].default_cores)
+            self.assertEqual(run["jobs"]["streamcluster"]["planned_threads"], JOB_CATALOG["streamcluster"].default_threads)
 
     def test_load_run_view_reconstructs_legacy_pods_runs(self) -> None:
         with temp_workspace() as workspace:
@@ -201,6 +203,50 @@ class ViewerDataTests(unittest.TestCase):
             self.assertEqual(run["overall_status"], "pass")
             self.assertEqual(run["run_label"], "2026-04-23 05:06:18 CEST")
             self.assertEqual(run["timestamp_iso"], "2026-04-23T03:06:18+00:00")
+
+    def test_load_run_view_exposes_policy_core_assignments(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            experiment_root = root / "runs" / "demo"
+            durations = {
+                "barnes": 61,
+                "blackscholes": 53,
+                "canneal": 104,
+                "freqmine": 77,
+                "radix": 11,
+                "streamcluster": 121,
+                "vips": 30,
+            }
+            run_dir = _write_run(
+                experiment_root,
+                "20260423t030618z",
+                policy_name="custom-cores",
+                durations_by_job=durations,
+                snapshot_filename="pods.json",
+                mcperf_values=[833.1, 840.2],
+            )
+            policy = _policy_payload("custom-cores")
+            policy["jobs"]["vips"] = {**policy["jobs"]["vips"], "cores": "0-3", "threads": 4}
+            policy["jobs"]["radix"] = {**policy["jobs"]["radix"], "cores": "4-7", "threads": 4}
+            write_json_config(run_dir / "policy.yaml", policy)
+
+            run = load_run_view(root / "runs", "demo", "20260423t030618z")
+
+            self.assertEqual(run["jobs"]["vips"]["planned_cores"], "0-3")
+            self.assertEqual(run["jobs"]["vips"]["planned_core_ids"], [0, 1, 2, 3])
+            self.assertEqual(run["jobs"]["vips"]["planned_threads"], 4)
+            self.assertEqual(run["jobs"]["radix"]["planned_cores"], "4-7")
+            segments = {
+                segment["job_id"]: segment
+                for lane in run["timeline"]["lanes"]
+                for segment in lane["segments"]
+            }
+            self.assertEqual(segments["vips"]["cores"], "0-3")
+            self.assertEqual(segments["vips"]["threads"], 4)
+            self.assertEqual(segments["radix"]["core_ids"], [4, 5, 6, 7])
+            self.assertEqual(segments["memcached"]["cores"], "0")
+            self.assertEqual(segments["memcached"]["threads"], 1)
+            self.assertIn("node-a-8core-demo", run["timeline"]["lanes"][0]["node_names"])
 
     def test_load_run_view_handles_runs_without_pod_snapshot(self) -> None:
         with temp_workspace() as workspace:

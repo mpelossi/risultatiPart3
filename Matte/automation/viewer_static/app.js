@@ -55,6 +55,13 @@ function fmtSeconds(value) {
   return `${Number(value).toFixed(1)} s`;
 }
 
+function fmtSecondsCompact(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "n/a";
+  }
+  return `${Number(value).toFixed(0)}s`;
+}
+
 function fmtP95(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return "n/a";
@@ -74,6 +81,41 @@ function text(value, fallback = "n/a") {
     return fallback;
   }
   return String(value);
+}
+
+function coreLabel(value) {
+  return value === null || value === undefined || value === "" ? "cores n/a" : `cores ${value}`;
+}
+
+function compactCoreLabel(value) {
+  return value === null || value === undefined || value === "" ? "c n/a" : `c ${value}`;
+}
+
+function threadLabel(value) {
+  if (value === null || value === undefined || value === "") {
+    return "threads n/a";
+  }
+  const count = Number(value);
+  return `${value} ${count === 1 ? "thread" : "threads"}`;
+}
+
+function coreCount(segment) {
+  return Array.isArray(segment.core_ids) && segment.core_ids.length ? segment.core_ids.length : null;
+}
+
+function coreCountLabel(segment) {
+  const count = coreCount(segment);
+  if (count === null) {
+    return "core count n/a";
+  }
+  return `${count} ${count === 1 ? "core" : "cores"}`;
+}
+
+function compactResourceLabel(segment) {
+  const count = coreCount(segment);
+  const coreText = count === null ? "c?" : `${count}c`;
+  const threadText = segment.threads === null || segment.threads === undefined || segment.threads === "" ? "t?" : `${segment.threads}t`;
+  return `${coreText}/${threadText}`;
 }
 
 function statusClass(status) {
@@ -560,11 +602,17 @@ function createTimelineCard(run, explicitScaleMax, options = {}) {
   }
 
   const scaleMax = Math.max(Number(explicitScaleMax || 0), Number(timeline.max_end_s || 0), 1);
-  container.appendChild(createAxis(scaleMax));
+  const scroller = document.createElement("div");
+  scroller.className = "timeline-scroll";
+  const chart = document.createElement("div");
+  chart.className = "timeline-chart";
+  chart.appendChild(createAxis(scaleMax));
 
   (timeline.lanes || []).forEach((lane) => {
-    container.appendChild(createLane(lane, scaleMax));
+    chart.appendChild(createLane(lane, scaleMax));
   });
+  scroller.appendChild(chart);
+  container.appendChild(scroller);
   if (includeDetails) {
     container.appendChild(createTimelineDetails(timeline));
   }
@@ -599,7 +647,19 @@ function createLane(lane, scaleMax) {
 
   const label = document.createElement("div");
   label.className = "lane-label";
-  label.textContent = text(lane.label || lane.short_label, "lane");
+  const labelName = document.createElement("span");
+  labelName.className = "lane-label-name";
+  labelName.textContent = text(lane.label || lane.short_label, "lane");
+  const labelType = document.createElement("span");
+  labelType.className = "lane-label-type";
+  labelType.textContent = text(lane.lane_id, "");
+  const labelNode = document.createElement("span");
+  labelNode.className = "lane-label-node";
+  const rawNames = Array.isArray(lane.node_names) ? lane.node_names.filter(Boolean) : [];
+  labelNode.textContent = rawNames.length ? rawNames.join(", ") : "no pod node";
+  label.appendChild(labelName);
+  label.appendChild(labelType);
+  label.appendChild(labelNode);
   laneWrap.appendChild(label);
 
   const track = document.createElement("div");
@@ -614,13 +674,13 @@ function createLane(lane, scaleMax) {
     track.appendChild(empty);
   } else {
     const layout = layoutLaneSegments(segments);
-    const trackHeight = Math.max(58, layout.rowCount * 48 + (layout.memcached.length ? 26 : 12));
+    const trackHeight = Math.max(78, layout.rowCount * 58 + (layout.memcached.length ? 52 : 16));
     track.style.minHeight = `${trackHeight}px`;
     layout.jobs.forEach((item) => {
       track.appendChild(createSegment(item.segment, scaleMax, { rowIndex: item.rowIndex }));
     });
     layout.memcached.forEach((segment) => {
-      track.appendChild(createSegment(segment, scaleMax, { isMemcached: true }));
+      track.appendChild(createSegment(segment, scaleMax));
     });
   }
 
@@ -666,14 +726,14 @@ function createSegment(segment, scaleMax, options = {}) {
   const kind = text(segment.kind, "job");
   const jobId = text(segment.job_id, "unknown");
   const rawWidth = (Number(segment.duration_s || 0) / scaleMax) * 100;
-  const width = Math.max(rawWidth, kind === "memcached" ? 0 : 2.5);
+  const width = Math.max(rawWidth, kind === "memcached" ? 0 : 12);
   const left = (Number(segment.start_s || 0) / scaleMax) * 100;
   const boundedWidth = Math.max(0, Math.min(width, 100 - left));
+  const isTight = boundedWidth < 18 && kind !== "memcached";
   bar.className = [
     "segment",
     kind === "memcached" ? "memcached" : "",
-    boundedWidth < 9 && kind !== "memcached" ? "segment-tight" : "",
-    boundedWidth < 5 && kind !== "memcached" ? "segment-pin" : "",
+    isTight ? "segment-tight" : "",
     `job-${jobId}`,
   ].filter(Boolean).join(" ");
   bar.style.left = `${left}%`;
@@ -681,28 +741,51 @@ function createSegment(segment, scaleMax, options = {}) {
   if (options.rowIndex !== undefined) {
     bar.style.setProperty("--segment-row", String(options.rowIndex));
   }
-  bar.dataset.shortLabel = boundedWidth < 5
-    ? text(JOB_SHORT_LABELS[jobId] || jobId, jobId).slice(0, 1).toUpperCase()
-    : text(JOB_SHORT_LABELS[jobId] || jobId.slice(0, 1).toUpperCase());
   bar.title = [
     text(segment.label, jobId),
     `start: ${fmtSeconds(segment.start_s)}`,
     `end: ${fmtSeconds(segment.end_s)}`,
     `duration: ${fmtSeconds(segment.duration_s)}`,
+    coreCountLabel(segment),
+    threadLabel(segment.threads),
+    coreLabel(segment.cores),
     `status: ${text(segment.status, "unknown")}`,
+    segment.planned_node ? `planned node: ${segment.planned_node}` : null,
     segment.raw_node_name ? `node: ${segment.raw_node_name}` : null,
   ].filter(Boolean).join("\n");
 
   if (kind !== "memcached") {
     const name = document.createElement("span");
     name.className = "segment-label";
-    name.textContent = boundedWidth < 12 ? text(JOB_SHORT_LABELS[jobId], segment.label) : text(segment.label, jobId);
+    name.textContent = isTight ? text(JOB_SHORT_LABELS[jobId], segment.label) : text(segment.label, jobId);
     bar.appendChild(name);
 
     const meta = document.createElement("span");
     meta.className = "segment-meta";
-    meta.textContent = fmtSeconds(segment.duration_s);
+    meta.textContent = isTight
+      ? `${fmtSecondsCompact(segment.duration_s)} | ${compactResourceLabel(segment)} | ${text(segment.cores, "n/a")}`
+      : `${fmtSeconds(segment.duration_s)} | ${coreCountLabel(segment)} / ${threadLabel(segment.threads)} | ${coreLabel(segment.cores)}`;
     bar.appendChild(meta);
+
+    const cores = document.createElement("span");
+    cores.className = "segment-cores";
+    cores.textContent = `${compactResourceLabel(segment)} | ${compactCoreLabel(segment.cores)}`;
+    bar.appendChild(cores);
+  } else {
+    const name = document.createElement("span");
+    name.className = "segment-label";
+    name.textContent = "memcached";
+    bar.appendChild(name);
+
+    const meta = document.createElement("span");
+    meta.className = "segment-meta";
+    meta.textContent = `${fmtSeconds(segment.duration_s)} | ${coreCountLabel(segment)} / ${threadLabel(segment.threads)} | ${coreLabel(segment.cores)}`;
+    bar.appendChild(meta);
+
+    bar.setAttribute(
+      "aria-label",
+      `memcached ${fmtSeconds(segment.duration_s)} ${coreCountLabel(segment)} ${threadLabel(segment.threads)} ${coreLabel(segment.cores)}`
+    );
   }
   return bar;
 }
@@ -726,7 +809,7 @@ function createTimelineDetails(timeline) {
 
   const header = document.createElement("div");
   header.className = "timeline-detail-row timeline-detail-head";
-  ["Job", "Duration", "Start", "End", "Node", "Status"].forEach((labelText) => {
+  ["Job", "Duration", "Core Count", "Cores", "Threads", "Start", "End", "Node", "Status"].forEach((labelText) => {
     const cell = document.createElement("span");
     cell.textContent = labelText;
     header.appendChild(cell);
@@ -735,15 +818,15 @@ function createTimelineDetails(timeline) {
 
   let rowCount = 0;
   timelineSegments(timeline).forEach((segment) => {
-    if (segment.kind === "memcached") {
-      return;
-    }
     const row = document.createElement("div");
     row.className = "timeline-detail-row";
 
     [
       { className: "detail-job", value: text(JOB_LABELS[segment.job_id] || segment.label, segment.job_id) },
       { className: "detail-duration", value: fmtSeconds(segment.duration_s) },
+      { className: "detail-core-count", value: text(coreCount(segment), "n/a") },
+      { className: "detail-cores", value: text(segment.cores, "n/a") },
+      { className: "detail-threads", value: text(segment.threads, "n/a") },
       { className: "detail-time", value: fmtTimestamp(segment.started_at) },
       { className: "detail-time", value: fmtTimestamp(segment.finished_at) },
       { className: "detail-node", value: text(segment.raw_node_name || segment.lane_label) },

@@ -44,9 +44,9 @@ body {
 .page-shell {
   position: relative;
   z-index: 1;
-  width: min(1380px, calc(100vw - 32px));
+  width: min(1560px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 28px 0 56px;
+  padding: 22px 0 48px;
 }
 
 .hero {
@@ -71,11 +71,11 @@ body {
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .hero h1 {
-  font-size: clamp(2.2rem, 4vw, 4rem);
+  font-size: 3rem;
 }
 
 .hero-text,
@@ -89,7 +89,7 @@ body {
 .panel {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
-  border-radius: 24px;
+  border-radius: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
 }
@@ -98,8 +98,8 @@ body {
 .best-panel,
 .compare-panel,
 .history-panel {
-  padding: 18px;
-  margin-bottom: 18px;
+  padding: 16px;
+  margin-bottom: 16px;
   animation: rise-in 360ms ease both;
 }
 
@@ -182,8 +182,8 @@ body {
 }
 
 .stat-card {
-  padding: 18px;
-  border-radius: 20px;
+  padding: 16px;
+  border-radius: 12px;
   background: rgba(255, 251, 245, 0.84);
   border: 1px solid rgba(32, 42, 53, 0.07);
   box-shadow: var(--shadow);
@@ -204,7 +204,7 @@ body {
 
 .stat-value {
   margin: 10px 0 6px;
-  font-size: clamp(1.7rem, 2.8vw, 2.4rem);
+  font-size: 2rem;
   font-weight: 700;
 }
 
@@ -226,10 +226,10 @@ body {
 .best-card,
 .history-card,
 .compare-card {
-  border-radius: 20px;
+  border-radius: 12px;
   border: 1px solid rgba(18, 31, 44, 0.08);
   background: rgba(255, 255, 255, 0.72);
-  padding: 18px;
+  padding: 16px;
 }
 
 .best-card {
@@ -272,7 +272,7 @@ body {
 
 .metric {
   padding: 12px;
-  border-radius: 16px;
+  border-radius: 10px;
   background: rgba(244, 239, 228, 0.8);
 }
 
@@ -352,7 +352,7 @@ body {
 
 .card-button {
   border: 0;
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 10px 14px;
   background: rgba(18, 31, 44, 0.08);
   color: var(--page-ink);
@@ -412,19 +412,28 @@ body {
 }
 
 .timeline-card {
-  --lane-label-width: 78px;
+  --lane-label-width: 210px;
   margin-top: 14px;
-  padding: 14px;
-  border-radius: 18px;
+  padding: 12px;
+  border-radius: 12px;
   background: rgba(239, 242, 245, 0.78);
+}
+
+.timeline-scroll {
   overflow: hidden;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.timeline-chart {
+  min-width: 980px;
 }
 
 .axis {
   position: relative;
-  height: 26px;
+  height: 32px;
   margin-left: var(--lane-label-width);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   color: var(--muted);
   font-size: 0.78rem;
 }
@@ -466,8 +475,8 @@ body {
 .lane {
   display: grid;
   grid-template-columns: var(--lane-label-width) minmax(0, 1fr);
-  gap: 0;
-  margin-bottom: 12px;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .lane:last-child {
@@ -475,19 +484,48 @@ body {
 }
 
 .lane-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
   align-self: start;
-  padding-top: 12px;
-  padding-right: 12px;
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid rgba(18, 31, 44, 0.07);
+  border-radius: 10px;
+  background: rgba(250, 251, 252, 0.94);
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   line-height: 1.2;
+}
+
+.lane-label-name,
+.lane-label-type,
+.lane-label-node {
+  display: block;
+}
+
+.lane-label-name {
+  margin-bottom: 5px;
+  color: var(--page-ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lane-label-type,
+.lane-label-node {
+  overflow-wrap: anywhere;
+}
+
+.lane-label-node {
+  margin-top: 4px;
+  color: #3f4c59;
 }
 
 .lane-track {
   position: relative;
-  border-radius: 16px;
+  border-radius: 10px;
   overflow: hidden;
   background:
     linear-gradient(90deg, transparent 0%, transparent calc(100% - 1px), rgba(18, 31, 44, 0.08) calc(100% - 1px)),
@@ -507,9 +545,9 @@ body {
 
 .segment {
   position: absolute;
-  top: calc(8px + (var(--segment-row, 0) * 48px));
-  height: 38px;
-  border-radius: 12px;
+  top: calc(10px + (var(--segment-row, 0) * 58px));
+  height: 48px;
+  border-radius: 10px;
   padding: 7px 10px;
   overflow: hidden;
   color: white;
@@ -520,37 +558,18 @@ body {
 
 .segment.memcached {
   top: auto;
-  bottom: 8px;
-  height: 14px;
-  padding: 0;
-  opacity: 0.5;
-  border-radius: 999px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 6px 10px;
+  opacity: 0.78;
+  border-radius: 10px;
 }
 
 .segment-tight {
   padding-inline: 6px;
-}
-
-.segment-tight .segment-meta {
-  display: none;
-}
-
-.segment-pin {
-  padding-inline: 0;
-}
-
-.segment-pin .segment-label,
-.segment-pin .segment-meta {
-  display: none;
-}
-
-.segment-pin::after {
-  content: attr(data-short-label);
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 38px;
-  text-align: center;
 }
 
 .segment-label {
@@ -568,6 +587,31 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.segment-tight .segment-label,
+.segment-tight .segment-meta {
+  font-size: 0.72rem;
+}
+
+.segment.memcached .segment-label,
+.segment.memcached .segment-meta {
+  display: inline;
+  margin-top: 0;
+}
+
+.segment.memcached .segment-label::after {
+  content: "|";
+  margin-left: 8px;
+  opacity: 0.6;
+}
+
+.segment-cores {
+  display: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .job-barnes {
@@ -605,7 +649,7 @@ body {
 .timeline-details {
   display: grid;
   gap: 6px;
-  margin-top: 12px;
+  margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid rgba(18, 31, 44, 0.1);
   font-size: 0.78rem;
@@ -615,10 +659,10 @@ body {
 
 .timeline-detail-row {
   display: grid;
-  grid-template-columns: minmax(110px, 1.1fr) 76px minmax(150px, 1.25fr) minmax(150px, 1.25fr) minmax(150px, 1fr) 92px;
+  grid-template-columns: minmax(126px, 1.1fr) 76px 82px 82px 70px minmax(150px, 1.2fr) minmax(150px, 1.2fr) minmax(170px, 1fr) 92px;
   gap: 8px;
   align-items: center;
-  min-width: 790px;
+  min-width: 1110px;
   min-height: 28px;
   padding: 6px 8px;
   border-radius: 8px;
@@ -642,7 +686,10 @@ body {
 }
 
 .detail-job,
-.detail-duration {
+.detail-duration,
+.detail-core-count,
+.detail-cores,
+.detail-threads {
   font-weight: 700;
 }
 
@@ -695,8 +742,16 @@ body {
 
 @media (max-width: 720px) {
   .page-shell {
-    width: min(100vw - 18px, 1380px);
+    width: min(100vw - 18px, 1560px);
     padding-top: 18px;
+  }
+
+  .hero h1 {
+    font-size: 2.25rem;
+  }
+
+  .stat-value {
+    font-size: 1.7rem;
   }
 
   .toolbar,

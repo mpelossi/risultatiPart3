@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .catalog import JOB_CATALOG, NODE_A, NODE_B
+from .catalog import JOB_CATALOG, NODE_A, NODE_B, validate_node_core_spec
 from .config import PolicyConfig, load_policy_config
 from .metrics import MCPERF_SYNC_ERROR_MARKERS, SLO_P95_US, summarize_pods
 from .results import resolve_experiment_root, sort_best_runs
@@ -90,7 +90,11 @@ def _build_run_view(run_dir: Path, *, experiment_id: str) -> dict[str, object]:
     policy_name = None
     expected_jobs = set(JOB_CATALOG)
     planned_job_nodes = {job_id: entry.default_node for job_id, entry in JOB_CATALOG.items()}
+    planned_job_cores = {job_id: entry.default_cores for job_id, entry in JOB_CATALOG.items()}
+    planned_job_threads = {job_id: entry.default_threads for job_id, entry in JOB_CATALOG.items()}
     planned_memcached_node: str | None = None
+    planned_memcached_cores: str | None = None
+    planned_memcached_threads: int | None = None
 
     if policy_path.exists():
         try:
@@ -101,7 +105,11 @@ def _build_run_view(run_dir: Path, *, experiment_id: str) -> dict[str, object]:
             policy_name = policy.policy_name
             expected_jobs = set(policy.job_overrides) or set(JOB_CATALOG)
             planned_job_nodes = _planned_job_nodes(policy)
+            planned_job_cores = _planned_job_cores(policy)
+            planned_job_threads = _planned_job_threads(policy)
             planned_memcached_node = policy.memcached.node
+            planned_memcached_cores = policy.memcached.cores
+            planned_memcached_threads = policy.memcached.threads
 
     summary_payload = None
     is_reconstructed = False
@@ -156,10 +164,14 @@ def _build_run_view(run_dir: Path, *, experiment_id: str) -> dict[str, object]:
         summary_payload.get("jobs"),
         expected_jobs=expected_jobs,
         planned_job_nodes=planned_job_nodes,
+        planned_job_cores=planned_job_cores,
+        planned_job_threads=planned_job_threads,
     )
     timeline = _build_timeline(
         jobs,
         planned_memcached_node=planned_memcached_node,
+        planned_memcached_cores=planned_memcached_cores,
+        planned_memcached_threads=planned_memcached_threads,
         memcached_summary=_ensure_mapping(summary_payload.get("memcached")),
         memcached_timing=memcached_timing,
     )
@@ -378,6 +390,8 @@ def _build_jobs_view(
     *,
     expected_jobs: set[str],
     planned_job_nodes: dict[str, str],
+    planned_job_cores: dict[str, str],
+    planned_job_threads: dict[str, int],
 ) -> dict[str, dict[str, object]]:
     jobs_map = _ensure_mapping(raw_jobs)
     all_job_ids = sorted(set(expected_jobs) | set(jobs_map))
@@ -386,13 +400,18 @@ def _build_jobs_view(
         raw_job = _ensure_mapping(jobs_map.get(job_id))
         actual_node = _string_or_none(raw_job.get("node_name"))
         canonical_node = _canonical_node_name(actual_node) or planned_job_nodes.get(job_id)
+        planned_node = planned_job_nodes.get(job_id)
+        planned_cores = planned_job_cores.get(job_id)
         jobs[job_id] = {
             "job_id": job_id,
             "status": str(raw_job.get("status") or "missing"),
             "phase": _string_or_none(raw_job.get("phase")),
             "node_name": actual_node,
             "canonical_node": canonical_node,
-            "planned_node": planned_job_nodes.get(job_id),
+            "planned_node": planned_node,
+            "planned_cores": planned_cores,
+            "planned_core_ids": list(_parse_core_ids(planned_cores, planned_node)),
+            "planned_threads": planned_job_threads.get(job_id),
             "pod_name": _string_or_none(raw_job.get("pod_name")),
             "pod_ip": _string_or_none(raw_job.get("pod_ip")),
             "started_at": _string_or_none(raw_job.get("started_at")),
@@ -406,6 +425,8 @@ def _build_timeline(
     jobs: dict[str, dict[str, object]],
     *,
     planned_memcached_node: str | None,
+    planned_memcached_cores: str | None,
+    planned_memcached_threads: int | None,
     memcached_summary: dict[str, object],
     memcached_timing: dict[str, object] | None,
 ) -> dict[str, object]:
@@ -426,6 +447,10 @@ def _build_timeline(
                 "kind": "job",
                 "status": job.get("status"),
                 "lane_id": job.get("canonical_node"),
+                "planned_node": job.get("planned_node"),
+                "cores": job.get("planned_cores"),
+                "core_ids": job.get("planned_core_ids"),
+                "threads": job.get("planned_threads"),
                 "raw_node_name": job.get("node_name"),
                 "started_at": job.get("started_at"),
                 "finished_at": job.get("finished_at"),
@@ -463,6 +488,10 @@ def _build_timeline(
             "start_s": start_s,
             "end_s": end_s,
             "duration_s": end_s - start_s,
+            "planned_node": segment["planned_node"],
+            "cores": segment["cores"],
+            "core_ids": segment["core_ids"],
+            "threads": segment["threads"],
             "raw_node_name": segment["raw_node_name"],
             "started_at": segment["started_at"],
             "finished_at": segment["finished_at"],
@@ -494,6 +523,10 @@ def _build_timeline(
                 "start_s": start_s,
                 "end_s": end_s,
                 "duration_s": max(0.0, end_s - start_s),
+                "planned_node": planned_memcached_node,
+                "cores": planned_memcached_cores,
+                "core_ids": list(_parse_core_ids(planned_memcached_cores, planned_memcached_node)),
+                "threads": planned_memcached_threads,
                 "raw_node_name": _string_or_none(memcached_summary.get("node_name")),
                 "started_at": memcached_timing.get("started_at") if memcached_timing is not None else None,
                 "finished_at": memcached_timing.get("finished_at") if memcached_timing is not None else None,
@@ -503,6 +536,13 @@ def _build_timeline(
 
     for lane in lanes.values():
         lane["segments"].sort(key=lambda item: (float(item["start_s"]), str(item["job_id"])))
+        lane["node_names"] = sorted(
+            {
+                str(segment["raw_node_name"])
+                for segment in lane["segments"]
+                if segment.get("raw_node_name")
+            }
+        )
 
     return {
         "has_data": any(lane["segments"] for lane in lanes.values()),
@@ -537,6 +577,31 @@ def _planned_job_nodes(policy: PolicyConfig) -> dict[str, str]:
         override = policy.job_overrides.get(job_id)
         planned[job_id] = override.node if override is not None and override.node is not None else catalog_entry.default_node
     return planned
+
+
+def _planned_job_cores(policy: PolicyConfig) -> dict[str, str]:
+    planned: dict[str, str] = {}
+    for job_id, catalog_entry in JOB_CATALOG.items():
+        override = policy.job_overrides.get(job_id)
+        planned[job_id] = override.cores if override is not None and override.cores is not None else catalog_entry.default_cores
+    return planned
+
+
+def _planned_job_threads(policy: PolicyConfig) -> dict[str, int]:
+    planned: dict[str, int] = {}
+    for job_id, catalog_entry in JOB_CATALOG.items():
+        override = policy.job_overrides.get(job_id)
+        planned[job_id] = override.threads if override is not None and override.threads is not None else catalog_entry.default_threads
+    return planned
+
+
+def _parse_core_ids(core_spec: str | None, node: str | None) -> tuple[int, ...]:
+    if core_spec is None or node is None:
+        return ()
+    try:
+        return validate_node_core_spec(core_spec, node)
+    except ValueError:
+        return ()
 
 
 def _canonical_node_name(value: str | None) -> str | None:
