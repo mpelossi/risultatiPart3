@@ -1,4 +1,4 @@
-policy_name: "ultimate-parallel-tail"
+policy_name: "ultimate-5-3-split"
 memcached:
   node: "node-b-4core"
   cores: "0"
@@ -28,13 +28,13 @@ jobs:
     
   vips:
     node: "node-a-8core"
-    cores: "0-3"
-    threads: 4
+    cores: "0-5"
+    threads: 6
     after: "freqmine"
   radix:
     node: "node-a-8core"
-    cores: "4-7"
-    threads: 4
+    cores: "6-7"
+    threads: 2
     after: "freqmine"
     
   barnes:

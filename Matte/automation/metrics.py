@@ -8,6 +8,10 @@ from .timing import collect_completed_job_timings, compute_makespan_s, load_pod_
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 SLO_P95_US = 1000.0
+MCPERF_SYNC_ERROR_MARKERS = (
+    "sync_agent",
+    "ERROR during synchronization",
+)
 
 
 def _parse_time(value: str | None) -> datetime | None:
@@ -32,6 +36,16 @@ def parse_mcperf_output(path: Path | None) -> dict[str, object]:
             "slo_violations": None,
             "measurement_status": "empty",
         }
+    sync_error_lines = [
+        line for line in lines if any(marker in line for marker in MCPERF_SYNC_ERROR_MARKERS)
+    ]
+    if sync_error_lines:
+        return {
+            "samples": [],
+            "max_p95_us": None,
+            "slo_violations": None,
+            "measurement_status": "parse_error",
+        }
     header = lines[0].split()
     if "p95" not in header:
         raise ValueError(f"mcperf output is missing p95 column: {path}")
@@ -46,9 +60,16 @@ def parse_mcperf_output(path: Path | None) -> dict[str, object]:
         p95_value = float(columns[p95_index])
         p95_values.append(p95_value)
         samples.append({"type": sample_type, "p95_us": p95_value, "raw": line})
+    if not samples:
+        return {
+            "samples": [],
+            "max_p95_us": None,
+            "slo_violations": None,
+            "measurement_status": "no_samples",
+        }
     return {
         "samples": samples,
-        "max_p95_us": max(p95_values) if p95_values else None,
+        "max_p95_us": max(p95_values),
         "slo_violations": sum(1 for value in p95_values if value > SLO_P95_US),
         "measurement_status": "ok",
     }

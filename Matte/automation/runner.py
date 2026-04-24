@@ -6,7 +6,7 @@ import subprocess
 import threading
 import time
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .catalog import JOB_CATALOG
@@ -33,8 +33,11 @@ class MeasurementHandle:
     process: subprocess.Popen[str]
     reader_thread: threading.Thread
     ready_event: threading.Event
+    sample_event: threading.Event
+    error_event: threading.Event
     node_name: str
     remote_pid_file: str
+    error_messages: list[str] = field(default_factory=list)
     stop_requested: bool = False
 
 
@@ -222,6 +225,60 @@ class ExperimentRunner:
                 f"Failed to send SIG{signal_name} to the mcperf measurement wrapper: {result.combined_output}"
             )
 
+    def _restart_mcperf_agents(
+        self,
+        *,
+        nodes: dict[str, object],
+        log_path: Path,
+    ) -> None:
+        for nodetype in ("client-agent-a", "client-agent-b"):
+            node = nodes.get(nodetype)
+            if node is None:
+                raise RuntimeError(f"Missing node for {nodetype}")
+            node_name = getattr(node, "name", None)
+            if not isinstance(node_name, str) or not node_name:
+                raise RuntimeError(f"Missing Kubernetes node name for {nodetype}")
+            self._log(log_path, f"Restarting mcperf-agent.service on {nodetype} ({node_name})")
+            script = "\n".join(
+                [
+                    "set -euo pipefail",
+                    "sudo systemctl restart mcperf-agent.service",
+                    "deadline=$((SECONDS + 20))",
+                    'while [ "$SECONDS" -lt "$deadline" ]; do',
+                    "  if sudo systemctl is-active --quiet mcperf-agent.service; then",
+                    "    sleep 1",
+                    "    exit 0",
+                    "  fi",
+                    "  sleep 1",
+                    "done",
+                    "sudo systemctl status mcperf-agent.service --no-pager -l",
+                    "exit 1",
+                ]
+            )
+            result = self.cluster.ssh(node_name, self._bash_lc(script), check=False)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"mcperf-agent.service did not become active on {nodetype} ({node_name}): "
+                    f"{result.combined_output}"
+                )
+
+    def _line_has_mcperf_sync_error(self, line: str) -> bool:
+        return "sync_agent" in line or "ERROR during synchronization" in line
+
+    def _line_looks_like_mcperf_sample(self, line: str, p95_index: int | None) -> bool:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("mcperf.cc"):
+            return False
+        columns = stripped.split()
+        index = 12 if p95_index is None else p95_index
+        if len(columns) <= index:
+            return False
+        try:
+            float(columns[index])
+        except ValueError:
+            return False
+        return True
+
     def _start_measurement(
         self,
         *,
@@ -315,16 +372,32 @@ class ExperimentRunner:
             stderr=subprocess.STDOUT,
         )
         ready_event = threading.Event()
+        sample_event = threading.Event()
+        error_event = threading.Event()
+        error_messages: list[str] = []
 
         def _reader() -> None:
             assert process.stdout is not None
+            sample_logged = False
+            p95_index: int | None = None
             with mcperf_path.open("w", encoding="utf-8") as handle:
                 for line in process.stdout:
                     handle.write(line)
                     handle.flush()
+                    if self._line_has_mcperf_sync_error(line):
+                        error_messages.append(line.strip())
+                        error_event.set()
                     if line.startswith("#type"):
+                        header = line.split()
+                        if "p95" in header:
+                            p95_index = header.index("p95")
                         ready_event.set()
                         self._log(log_path, "mcperf measurement header observed")
+                    if self._line_looks_like_mcperf_sample(line, p95_index):
+                        sample_event.set()
+                        if not sample_logged:
+                            sample_logged = True
+                            self._log(log_path, "mcperf measurement sample observed")
 
         reader_thread = threading.Thread(target=_reader, daemon=True)
         reader_thread.start()
@@ -332,14 +405,33 @@ class ExperimentRunner:
             process=process,
             reader_thread=reader_thread,
             ready_event=ready_event,
+            sample_event=sample_event,
+            error_event=error_event,
+            error_messages=error_messages,
             node_name=measure_node.name,
             remote_pid_file=remote_pid_file,
         )
 
     def _wait_for_measurement_start(self, handle: MeasurementHandle) -> None:
-        if not handle.ready_event.wait(timeout=self.experiment.measurement.max_start_wait_s):
-            handle.process.terminate()
-            raise TimeoutError("mcperf measurement did not become ready in time")
+        deadline = time.monotonic() + self.experiment.measurement.max_start_wait_s
+        while time.monotonic() < deadline:
+            if handle.error_event.is_set():
+                handle.process.terminate()
+                details = "; ".join(message for message in handle.error_messages if message)
+                suffix = f": {details}" if details else ""
+                raise RuntimeError(f"mcperf measurement failed during agent synchronization{suffix}")
+            if handle.sample_event.wait(timeout=0.5):
+                return
+            return_code = handle.process.poll()
+            if return_code is not None:
+                handle.reader_thread.join(timeout=5)
+                if handle.error_event.is_set():
+                    details = "; ".join(message for message in handle.error_messages if message)
+                    suffix = f": {details}" if details else ""
+                    raise RuntimeError(f"mcperf measurement failed during agent synchronization{suffix}")
+                raise RuntimeError(f"mcperf measurement exited before the first sample with code {return_code}")
+        handle.process.terminate()
+        raise TimeoutError("mcperf measurement did not produce a latency sample in time")
 
     def _wait_for_measurement_finish(self, handle: MeasurementHandle, *, timeout_s: float | None = None) -> None:
         timeout = self.experiment.measurement.completion_timeout_s if timeout_s is None else timeout_s
@@ -634,6 +726,7 @@ class ExperimentRunner:
         agent_b_ip = nodes["client-agent-b"].internal_ip
         if not agent_a_ip or not agent_b_ip:
             raise RuntimeError("Agent internal IPs are missing")
+        self._restart_mcperf_agents(nodes=nodes, log_path=log_path)
 
         self._log(log_path, f"Starting measurement against memcached IP {memcached_ip}")
         measurement = self._start_measurement(
@@ -644,7 +737,7 @@ class ExperimentRunner:
             agent_b_ip=agent_b_ip,
             log_path=log_path,
         )
-        self._log(log_path, "Waiting for mcperf measurement header")
+        self._log(log_path, "Waiting for first mcperf measurement sample")
         self._wait_for_measurement_start(measurement)
         self._log(log_path, "mcperf measurement is live")
 

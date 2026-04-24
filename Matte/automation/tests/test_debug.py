@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from Matte.automation import cli
+from Matte.automation import viewer
 from Matte.automation.cluster import ClusterController
 from Matte.automation.config import ExperimentConfig, MeasurementConfig, MemcachedConfig, PolicyConfig
 from Matte.automation.debug import render_debug_commands, summarize_provisioning_hints
@@ -245,6 +246,36 @@ class FailureSurfaceTests(unittest.TestCase):
 
         self.assertEqual(export_submission.call_args.kwargs["results_root"], expected_root.resolve())
         self.assertEqual(output.getvalue().strip(), "/tmp/submission")
+
+    def test_results_viewer_uses_automation_runs_directory_by_default(self) -> None:
+        expected_root = Path(cli.__file__).resolve().parent / "runs"
+
+        with patch("Matte.automation.cli.launch_run_viewer", return_value=0) as launch_run_viewer:
+            cli.main(["results", "viewer"])
+
+        self.assertEqual(launch_run_viewer.call_args.kwargs["results_root"], expected_root.resolve())
+        self.assertEqual(launch_run_viewer.call_args.kwargs["experiment_id"], None)
+        self.assertEqual(launch_run_viewer.call_args.kwargs["host"], "127.0.0.1")
+        self.assertEqual(launch_run_viewer.call_args.kwargs["port"], 8000)
+        self.assertEqual(launch_run_viewer.call_args.kwargs["open_browser"], True)
+
+    def test_results_viewer_can_disable_browser_open(self) -> None:
+        with patch("Matte.automation.cli.launch_run_viewer", return_value=0) as launch_run_viewer:
+            cli.main(["results", "viewer", "--no-open"])
+
+        self.assertEqual(launch_run_viewer.call_args.kwargs["open_browser"], False)
+
+    def test_viewer_py_main_uses_same_defaults(self) -> None:
+        expected_root = Path(viewer.__file__).resolve().parent / "runs"
+
+        with patch("Matte.automation.viewer.launch_run_viewer", return_value=0) as launch_run_viewer:
+            viewer.main(["--experiment", "demo", "--no-open"])
+
+        self.assertEqual(launch_run_viewer.call_args.kwargs["results_root"], expected_root.resolve())
+        self.assertEqual(launch_run_viewer.call_args.kwargs["experiment_id"], "demo")
+        self.assertEqual(launch_run_viewer.call_args.kwargs["host"], "127.0.0.1")
+        self.assertEqual(launch_run_viewer.call_args.kwargs["port"], 8000)
+        self.assertEqual(launch_run_viewer.call_args.kwargs["open_browser"], False)
 
     def test_run_cli_rejects_dry_run_with_precache(self) -> None:
         with self.assertRaises(SystemExit) as exc:

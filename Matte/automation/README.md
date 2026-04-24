@@ -90,6 +90,10 @@ python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precac
 memcached images on both benchmark nodes so the measured run does not spend time pulling
 containers.
 
+After the first warm run on an unchanged cluster, repeating `run once --precache` is safe
+but usually optional because the images should already be present. For `run batch
+--precache`, the automation warms images once before the first repetition only.
+
 ### 7. Run three repetitions
 
 ```bash
@@ -101,6 +105,15 @@ python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 
 ```bash
 python3 cli.py results best --experiment part3-handcrafted
 ```
+
+Or open the run viewer:
+
+```bash
+python3 cli.py results viewer --experiment part3-handcrafted
+```
+
+The viewer serves the frontend from this automation directory, reads `runs/` by default,
+and opens your browser automatically.
 
 ### 9. Export submission files
 
@@ -313,6 +326,10 @@ deletes the transient warmup pods before memcached and the benchmark jobs start.
 workflow. `summary.json` is a derived convenience report built from `results.json` and
 `mcperf.txt`.
 
+If you already warmed the images on this cluster, you may omit `--precache` on later
+single runs. Re-running it is not harmful; it just creates short-lived image-warmup pods
+and deletes them before memcached starts.
+
 When the run stops measurement, the signal is sent only to the temporary `mcperf` wrapper on
 `client-measure`. It does not target the memcached pod or the long-lived
 `mcperf-agent.service` processes on `client-agent-a` / `client-agent-b`.
@@ -402,6 +419,23 @@ Runs the same experiment multiple times.
 ### `python3 cli.py results best --experiment part3-handcrafted`
 
 Shows the best completed runs according to the built-in ranking.
+
+### `python3 cli.py results viewer --experiment part3-handcrafted`
+
+Starts a small local file server for the run viewer, using this directory's `runs/` folder
+by default. It prints the URL and tries to open the browser automatically.
+
+Useful options:
+- `--no-open` keeps the server-only behavior for SSH/headless sessions
+- `--host 0.0.0.0` makes the viewer reachable from another machine that can access the port
+- `--port 8080` chooses a different port
+- `--results-root /path/to/runs` reads a different results directory
+
+You can also run the same viewer directly:
+
+```bash
+python3 viewer.py --experiment part3-handcrafted
+```
 
 ### `python3 cli.py export submission --experiment part3-handcrafted --group 054 --task 3_1`
 

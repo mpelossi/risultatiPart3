@@ -265,6 +265,10 @@ class FakeMeasurementRunner(ExperimentRunner):
         self.measurement_finish_s = measurement_finish_s
         self.measurement_shutdown_s = measurement_shutdown_s
         self.measurement_events: list[tuple[str, float]] = []
+        self.agent_restart_events: list[float] = []
+
+    def _restart_mcperf_agents(self, *, nodes: dict[str, object], log_path: Path) -> None:  # type: ignore[override]
+        self.agent_restart_events.append(self.clock.now)
 
     def _start_measurement(self, *, run_dir: Path, **kwargs):  # type: ignore[override]
         (run_dir / "mcperf.txt").write_text("#type p95\nread 500\n", encoding="utf-8")
@@ -655,6 +659,28 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
 
             self.assertEqual(len(run_dirs), 2)
             self.assertEqual(len(cluster.precache_wait_calls), 1)
+
+    def test_run_batch_restarts_mcperf_agents_before_every_measurement(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, _cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+
+            with patch("Matte.automation.runner.assert_client_provisioning"), patch(
+                "Matte.automation.runner.collect_describes"
+            ), patch(
+                "Matte.automation.runner.summarize_run",
+                return_value={"overall_status": "pass"},
+            ):
+                run_dirs = runner.run_batch(2)
+
+            self.assertEqual(len(run_dirs), 2)
+            self.assertEqual(len(runner.agent_restart_events), 2)
+            self.assertLessEqual(runner.agent_restart_events[0], runner.measurement_events[0][1])
+            self.assertLessEqual(runner.agent_restart_events[1], runner.measurement_events[3][1])
 
     def test_intentional_measurement_shutdown_still_summarizes_as_pass(self) -> None:
         with temp_workspace() as workspace:

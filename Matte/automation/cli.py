@@ -27,10 +27,11 @@ from .provision import (
 from .results import load_run_summaries, sort_best_runs
 from .runner import ExperimentRunner
 from .manifests import resolve_jobs
+from .viewer import DEFAULT_RESULTS_ROOT, launch_run_viewer
 
 
 def _default_results_root() -> Path:
-    return Path(__file__).resolve().parent / "runs"
+    return DEFAULT_RESULTS_ROOT
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -92,6 +93,12 @@ def _build_parser() -> argparse.ArgumentParser:
     results_best = results_sub.add_parser("best")
     results_best.add_argument("--experiment", required=True)
     results_best.add_argument("--results-root", default=str(_default_results_root()))
+    results_viewer = results_sub.add_parser("viewer")
+    results_viewer.add_argument("--experiment")
+    results_viewer.add_argument("--results-root", default=str(_default_results_root()))
+    results_viewer.add_argument("--host", default="127.0.0.1")
+    results_viewer.add_argument("--port", type=int, default=8000)
+    results_viewer.add_argument("--no-open", action="store_true")
 
     export_parser = subparsers.add_parser("export")
     export_sub = export_parser.add_subparsers(dest="export_command", required=True)
@@ -248,6 +255,15 @@ def main(argv: list[str] | None = None) -> int:
                 summary.get("run_dir"),
             )
         return 0
+
+    if args.command == "results" and args.results_command == "viewer":
+        return launch_run_viewer(
+            results_root=Path(args.results_root).resolve(),
+            experiment_id=args.experiment,
+            host=args.host,
+            port=args.port,
+            open_browser=not args.no_open,
+        )
 
     if args.command == "export" and args.export_command == "submission":
         output_dir = export_submission(
