@@ -25,6 +25,38 @@ const clearSelectionButton = document.getElementById("clear-selection-button");
 const statCardTemplate = document.getElementById("stat-card-template");
 const REFRESH_INTERVAL_MS = 5000;
 const MAX_SELECTED_RUNS = 2;
+const TIMELINE_SEGMENT_TOP_PX = 10;
+const TIMELINE_SEGMENT_ROW_HEIGHT_PX = 58;
+const TIMELINE_TRACK_MIN_HEIGHT_PX = 78;
+const TIMELINE_TRACK_BOTTOM_GAP_PX = 16;
+const TIMELINE_TRACK_MEMCACHED_GAP_PX = 52;
+const CLASSES = {
+  emptyState: "empty-state rounded-2xl bg-white/60 p-5 text-[var(--muted)]",
+  bestCard: "best-card best-highlight grid min-w-0 grid-cols-1 gap-5 rounded-[20px] border border-emerald-700/30 bg-white/75 p-5 shadow-[0_18px_40px_rgba(45,125,87,0.14)]",
+  historyCard: "history-card flex min-w-0 flex-col rounded-[20px] border border-slate-900/10 bg-white/75 p-5 transition hover:-translate-y-0.5",
+  compareCard: "compare-card flex min-w-0 flex-col gap-4 rounded-[20px] border border-slate-900/10 bg-white/75 p-5",
+  bestHighlight: "best-highlight border-emerald-700/30 shadow-[0_18px_40px_rgba(45,125,87,0.14)]",
+  selectedHighlight: "selected-highlight shadow-[0_0_0_4px_var(--selected-ring),var(--shadow)]",
+  primaryDetail: "primary-detail border-emerald-700/25",
+  runHead: "flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-start",
+  runTitle: "m-0 text-[1.2rem] font-bold leading-tight",
+  runSubtitle: "mt-1.5 mb-0 text-[var(--muted)]",
+  sectionNote: "mt-2.5 max-w-[720px] text-[var(--muted)] leading-6",
+  metricsGrid: "metrics-grid my-4 grid grid-cols-3 gap-3 max-[720px]:grid-cols-1",
+  metricsGridFlush: "metrics-grid grid grid-cols-3 gap-3 max-[720px]:grid-cols-1",
+  metric: "rounded-[14px] border border-slate-900/5 bg-slate-100/75 px-3.5 py-3",
+  metricLabel: "block text-[0.78rem] uppercase tracking-[0.08em] text-[var(--muted)]",
+  metricValue: "mt-1.5 block text-[1.05rem] font-bold",
+  badgeRow: "badge-row flex flex-wrap gap-2.5",
+  badge: "badge inline-flex min-h-[30px] items-center rounded-full bg-slate-900/10 px-2.5 py-1.5 text-[0.82rem] text-[var(--page-ink)]",
+  issueRow: "issue-row flex flex-wrap gap-2.5",
+  issue: "issue mt-2.5 rounded-[14px] bg-[rgba(196,77,43,0.08)] px-3 py-2.5 text-[var(--accent-deep)]",
+  cardActions: "card-actions mt-4 flex flex-wrap items-center gap-3",
+  cardActionsSeparated: "card-actions mt-auto flex flex-wrap items-center gap-3 border-t border-slate-900/10 pt-4",
+  cardButton: "card-button inline-flex min-h-[42px] items-center justify-center rounded-full bg-slate-900/10 px-4 py-2.5 text-[var(--page-ink)] transition hover:-translate-y-px focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]",
+  primaryButton: "bg-[var(--accent)] text-white",
+  finePrint: "mt-3 text-[0.84rem] text-[var(--muted)]",
+};
 
 const JOB_LABELS = {
   memcached: "memcached",
@@ -121,6 +153,25 @@ function compactResourceLabel(segment) {
 function statusClass(status) {
   const normalized = text(status, "unknown").toLowerCase();
   return `status-${normalized.replace(/[^a-z0-9]+/g, "_")}`;
+}
+
+function cx(...values) {
+  return values.filter(Boolean).join(" ");
+}
+
+function statusPillClass(status) {
+  return cx(
+    "status-pill inline-flex min-h-[30px] items-center rounded-full px-2.5 py-1.5 text-[0.82rem] font-bold uppercase tracking-[0.06em] text-white",
+    statusClass(status),
+  );
+}
+
+function cardButtonClass(options = {}) {
+  return cx(
+    CLASSES.cardButton,
+    options.primary ? CLASSES.primaryButton : "",
+    options.selected ? "selected" : "",
+  );
 }
 
 function uniqueStatuses(runs) {
@@ -341,10 +392,10 @@ function createRunBadges(run) {
 
 function renderBadges(target, run) {
   const badgeRow = document.createElement("div");
-  badgeRow.className = "badge-row";
+  badgeRow.className = CLASSES.badgeRow;
   createRunBadges(run).forEach((badgeText) => {
     const badge = document.createElement("span");
-    badge.className = "badge";
+    badge.className = CLASSES.badge;
     badge.textContent = badgeText;
     badgeRow.appendChild(badge);
   });
@@ -356,12 +407,12 @@ function renderBestRun() {
   bestRunCard.innerHTML = "";
 
   if (!run) {
-    bestRunCard.className = "empty-state";
+    bestRunCard.className = CLASSES.emptyState;
     bestRunCard.textContent = "No run currently qualifies as best.";
     return;
   }
 
-  bestRunCard.className = "best-card best-highlight";
+  bestRunCard.className = CLASSES.bestCard;
   bestRunCard.appendChild(createRunSummaryBlock(run, { compact: false, includeTimeline: true }));
   bestRunCard.appendChild(createRunMetaBlock(run));
 }
@@ -370,40 +421,40 @@ function createRunSummaryBlock(run, options) {
   const wrapper = document.createElement("div");
 
   const head = document.createElement("div");
-  head.className = "run-title-row";
+  head.className = CLASSES.runHead;
 
   const titleGroup = document.createElement("div");
   const title = document.createElement("h3");
-  title.className = "run-title";
+  title.className = CLASSES.runTitle;
   title.textContent = text(run.run_label, run.run_id);
   titleGroup.appendChild(title);
 
   const subtitle = document.createElement("p");
-  subtitle.className = "run-subtitle";
+  subtitle.className = CLASSES.runSubtitle;
   subtitle.textContent = `${text(run.run_id)} | ${text(run.policy_name)} | ${text(run.timestamp_iso, "timestamp unavailable")}`;
   titleGroup.appendChild(subtitle);
   head.appendChild(titleGroup);
 
   const status = document.createElement("span");
-  status.className = `status-pill ${statusClass(run.overall_status)}`;
+  status.className = statusPillClass(run.overall_status);
   status.textContent = text(run.overall_status, "unknown");
   head.appendChild(status);
   wrapper.appendChild(head);
 
   const metrics = document.createElement("div");
-  metrics.className = "metrics-grid";
+  metrics.className = CLASSES.metricsGrid;
   [
     { label: "Makespan", value: fmtSeconds(run.makespan_s) },
     { label: "P95", value: fmtP95(run.max_observed_p95_us) },
     { label: "Measurement", value: text(run.measurement_status, "missing") },
   ].forEach((item) => {
     const metric = document.createElement("div");
-    metric.className = "metric";
+    metric.className = CLASSES.metric;
     const label = document.createElement("span");
-    label.className = "metric-label";
+    label.className = CLASSES.metricLabel;
     label.textContent = item.label;
     const value = document.createElement("span");
-    value.className = "metric-value";
+    value.className = CLASSES.metricValue;
     value.textContent = item.value;
     metric.appendChild(label);
     metric.appendChild(value);
@@ -415,17 +466,17 @@ function createRunSummaryBlock(run, options) {
 
   if (run.issues && run.issues.length) {
     const issue = document.createElement("div");
-    issue.className = "issue";
+    issue.className = CLASSES.issue;
     issue.textContent = run.issues[0];
     wrapper.appendChild(issue);
   }
 
   const actions = document.createElement("div");
-  actions.className = "card-actions";
+  actions.className = CLASSES.cardActions;
 
   const compareButton = document.createElement("button");
   compareButton.type = "button";
-  compareButton.className = `card-button primary ${state.selectedRunIds[0] === run.run_id ? "selected" : ""}`.trim();
+  compareButton.className = cardButtonClass({ primary: true, selected: state.selectedRunIds[0] === run.run_id });
   compareButton.textContent = state.selectedRunIds[0] === run.run_id ? "Viewing Details" : "View Details";
   compareButton.addEventListener("click", () => focusRun(run.run_id));
   actions.appendChild(compareButton);
@@ -433,7 +484,7 @@ function createRunSummaryBlock(run, options) {
   if (state.selectedRunIds[0] !== run.run_id) {
     const duoButton = document.createElement("button");
     duoButton.type = "button";
-    duoButton.className = `card-button ${state.selectedRunIds.includes(run.run_id) ? "selected" : ""}`.trim();
+    duoButton.className = cardButtonClass({ selected: state.selectedRunIds.includes(run.run_id) });
     duoButton.textContent = state.selectedRunIds.includes(run.run_id) ? "Remove Compare" : "Compare";
     duoButton.addEventListener("click", () => toggleComparisonRun(run.run_id));
     actions.appendChild(duoButton);
@@ -451,24 +502,24 @@ function createRunSummaryBlock(run, options) {
 function createRunMetaBlock(run) {
   const wrapper = document.createElement("div");
   const title = document.createElement("p");
-  title.className = "section-note";
+  title.className = CLASSES.sectionNote;
   title.textContent = "Quick notes";
   wrapper.appendChild(title);
 
   const metrics = document.createElement("div");
-  metrics.className = "metrics-grid";
+  metrics.className = CLASSES.metricsGrid;
   [
     { label: "Completed jobs", value: `${text(run.completed_job_count, 0)} / ${text(run.expected_job_count, 0)}` },
     { label: "Samples", value: text(run.sample_count, "0") },
     { label: "Best eligible", value: run.eligible_for_best ? "yes" : "no" },
   ].forEach((item) => {
     const metric = document.createElement("div");
-    metric.className = "metric";
+    metric.className = CLASSES.metric;
     const label = document.createElement("span");
-    label.className = "metric-label";
+    label.className = CLASSES.metricLabel;
     label.textContent = item.label;
     const value = document.createElement("span");
-    value.className = "metric-value";
+    value.className = CLASSES.metricValue;
     value.textContent = item.value;
     metric.appendChild(label);
     metric.appendChild(value);
@@ -478,10 +529,10 @@ function createRunMetaBlock(run) {
 
   if (run.issues && run.issues.length) {
     const issueRow = document.createElement("div");
-    issueRow.className = "issue-row";
+    issueRow.className = CLASSES.issueRow;
     run.issues.slice(0, 4).forEach((issueText) => {
       const issue = document.createElement("div");
-      issue.className = "issue";
+      issue.className = CLASSES.issue;
       issue.textContent = issueText;
       issueRow.appendChild(issue);
     });
@@ -489,7 +540,7 @@ function createRunMetaBlock(run) {
   }
 
   const finePrint = document.createElement("p");
-  finePrint.className = "fine-print";
+  finePrint.className = CLASSES.finePrint;
   finePrint.textContent = "Best-run ranking follows the existing CLI rule: pass first, then lowest makespan, then lowest p95.";
   wrapper.appendChild(finePrint);
   return wrapper;
@@ -504,11 +555,14 @@ function selectedRuns() {
 function renderCompare() {
   const runs = selectedRuns();
   compareGrid.innerHTML = "";
-  compareGrid.className = "compare-grid";
+  compareGrid.className = "grid gap-6";
 
   if (!runs.length) {
     compareNote.textContent = "Pick one run to inspect; add a second run to compare.";
-    compareGrid.innerHTML = '<div class="empty-state">No run selected yet.</div>';
+    const empty = document.createElement("div");
+    empty.className = CLASSES.emptyState;
+    empty.textContent = "No run selected yet.";
+    compareGrid.appendChild(empty);
     return;
   }
 
@@ -517,26 +571,28 @@ function renderCompare() {
     return Math.max(max, runMax);
   }, 0);
 
-  compareGrid.classList.add(runs.length === 1 ? "single-detail" : "comparison-mode");
+  compareGrid.className = runs.length === 1
+    ? "grid grid-cols-1 gap-6"
+    : "grid grid-cols-2 gap-6 max-[1080px]:grid-cols-1";
   compareNote.textContent = runs.length === 1
     ? "Single-run detail view. Use Compare on another run to place it beside this one."
     : `Shared axis uses ${fmtSeconds(scaleMax)} as the comparison ceiling.`;
   runs.forEach((run, index) => {
     const card = document.createElement("article");
-    card.className = [
-      "compare-card",
-      index === 0 ? "primary-detail" : "",
-      run.run_id === state.bestRunId ? "best-highlight" : "",
-    ].filter(Boolean).join(" ");
+    card.className = cx(
+      CLASSES.compareCard,
+      index === 0 ? CLASSES.primaryDetail : "",
+      run.run_id === state.bestRunId ? CLASSES.bestHighlight : "",
+    );
 
     const head = document.createElement("div");
-    head.className = "compare-head";
+    head.className = CLASSES.runHead;
     head.innerHTML = `
       <div>
-        <h3 class="run-title">${text(run.run_label, run.run_id)}</h3>
-        <p class="run-subtitle">${text(run.policy_name)} | ${text(run.run_id)}</p>
+        <h3 class="${CLASSES.runTitle}">${text(run.run_label, run.run_id)}</h3>
+        <p class="${CLASSES.runSubtitle}">${text(run.policy_name)} | ${text(run.run_id)}</p>
       </div>
-      <span class="status-pill ${statusClass(run.overall_status)}">${text(run.overall_status, "unknown")}</span>
+      <span class="${statusPillClass(run.overall_status)}">${text(run.overall_status, "unknown")}</span>
     `;
     card.appendChild(head);
 
@@ -549,17 +605,17 @@ function renderCompare() {
     card.appendChild(createTimelineCard(run, scaleMax, { includeDetails: runs.length === 1 }));
 
     const actions = document.createElement("div");
-    actions.className = "card-actions";
+    actions.className = CLASSES.cardActionsSeparated;
     const focusButton = document.createElement("button");
     focusButton.type = "button";
-    focusButton.className = `card-button primary ${index === 0 ? "selected" : ""}`.trim();
+    focusButton.className = cardButtonClass({ primary: true, selected: index === 0 });
     focusButton.textContent = index === 0 ? "Viewing Details" : "View Details";
     focusButton.addEventListener("click", () => focusRun(run.run_id));
     actions.appendChild(focusButton);
 
     const removeButton = document.createElement("button");
     removeButton.type = "button";
-    removeButton.className = "card-button";
+    removeButton.className = cardButtonClass();
     removeButton.textContent = runs.length === 1 ? "Clear" : "Remove";
     removeButton.addEventListener("click", () => removeSelectedRun(run.run_id));
     if (runs.length > 1 || index > 0) {
@@ -573,15 +629,15 @@ function renderCompare() {
 
 function createMetricsGrid(items) {
   const metrics = document.createElement("div");
-  metrics.className = "metrics-grid";
+  metrics.className = CLASSES.metricsGridFlush;
   items.forEach((item) => {
     const metric = document.createElement("div");
-    metric.className = "metric";
+    metric.className = CLASSES.metric;
     const label = document.createElement("span");
-    label.className = "metric-label";
+    label.className = CLASSES.metricLabel;
     label.textContent = item.label;
     const value = document.createElement("span");
-    value.className = "metric-value";
+    value.className = CLASSES.metricValue;
     value.textContent = item.value;
     metric.appendChild(label);
     metric.appendChild(value);
@@ -597,7 +653,10 @@ function createTimelineCard(run, explicitScaleMax, options = {}) {
 
   const timeline = run.timeline || {};
   if (!timeline.has_data) {
-    container.innerHTML = '<div class="empty-state">This run does not have enough timing data to render a chart.</div>';
+    const empty = document.createElement("div");
+    empty.className = CLASSES.emptyState;
+    empty.textContent = "This run does not have enough timing data to render a chart.";
+    container.appendChild(empty);
     return container;
   }
 
@@ -667,14 +726,18 @@ function createLane(lane, scaleMax) {
 
   const segments = lane.segments || [];
   if (!segments.length) {
-    track.style.minHeight = "54px";
+    track.style.minHeight = "64px";
     const empty = document.createElement("div");
     empty.className = "lane-empty";
     empty.textContent = "No timed work recorded.";
     track.appendChild(empty);
   } else {
     const layout = layoutLaneSegments(segments);
-    const trackHeight = Math.max(78, layout.rowCount * 58 + (layout.memcached.length ? 52 : 16));
+    const trackHeight = Math.max(
+      TIMELINE_TRACK_MIN_HEIGHT_PX,
+      layout.rowCount * TIMELINE_SEGMENT_ROW_HEIGHT_PX
+        + (layout.memcached.length ? TIMELINE_TRACK_MEMCACHED_GAP_PX : TIMELINE_TRACK_BOTTOM_GAP_PX),
+    );
     track.style.minHeight = `${trackHeight}px`;
     layout.jobs.forEach((item) => {
       track.appendChild(createSegment(item.segment, scaleMax, { rowIndex: item.rowIndex }));
@@ -740,6 +803,10 @@ function createSegment(segment, scaleMax, options = {}) {
   bar.style.width = `${boundedWidth}%`;
   if (options.rowIndex !== undefined) {
     bar.style.setProperty("--segment-row", String(options.rowIndex));
+    bar.style.setProperty(
+      "--segment-top",
+      `${TIMELINE_SEGMENT_TOP_PX + options.rowIndex * TIMELINE_SEGMENT_ROW_HEIGHT_PX}px`,
+    );
   }
   bar.title = [
     text(segment.label, jobId),
@@ -856,39 +923,42 @@ function renderHistory() {
   historyGrid.innerHTML = "";
 
   if (!state.filteredRuns.length) {
-    historyGrid.innerHTML = '<div class="empty-state">No runs match the current filters.</div>';
+    const empty = document.createElement("div");
+    empty.className = CLASSES.emptyState;
+    empty.textContent = "No runs match the current filters.";
+    historyGrid.appendChild(empty);
     return;
   }
 
   state.filteredRuns.forEach((run) => {
     const card = document.createElement("article");
-    card.className = [
-      "history-card",
-      run.run_id === state.bestRunId ? "best-highlight" : "",
-      state.selectedRunIds.includes(run.run_id) ? "selected-highlight" : "",
-    ].filter(Boolean).join(" ");
+    card.className = cx(
+      CLASSES.historyCard,
+      run.run_id === state.bestRunId ? CLASSES.bestHighlight : "",
+      state.selectedRunIds.includes(run.run_id) ? CLASSES.selectedHighlight : "",
+    );
 
     const head = document.createElement("div");
-    head.className = "history-head";
+    head.className = CLASSES.runHead;
     head.innerHTML = `
       <div>
-        <h3 class="run-title">${text(run.run_label, run.run_id)}</h3>
-        <p class="run-subtitle">${text(run.policy_name)} | ${text(run.run_id)}</p>
+        <h3 class="${CLASSES.runTitle}">${text(run.run_label, run.run_id)}</h3>
+        <p class="${CLASSES.runSubtitle}">${text(run.policy_name)} | ${text(run.run_id)}</p>
       </div>
-      <span class="status-pill ${statusClass(run.overall_status)}">${text(run.overall_status, "unknown")}</span>
+      <span class="${statusPillClass(run.overall_status)}">${text(run.overall_status, "unknown")}</span>
     `;
     card.appendChild(head);
 
     const metrics = document.createElement("div");
-    metrics.className = "metrics-grid";
+    metrics.className = CLASSES.metricsGrid;
     [
       { label: "Makespan", value: fmtSeconds(run.makespan_s) },
       { label: "P95", value: fmtP95(run.max_observed_p95_us) },
       { label: "Measurement", value: text(run.measurement_status, "missing") },
     ].forEach((item) => {
       const metric = document.createElement("div");
-      metric.className = "metric";
-      metric.innerHTML = `<span class="metric-label">${item.label}</span><span class="metric-value">${item.value}</span>`;
+      metric.className = CLASSES.metric;
+      metric.innerHTML = `<span class="${CLASSES.metricLabel}">${item.label}</span><span class="${CLASSES.metricValue}">${item.value}</span>`;
       metrics.appendChild(metric);
     });
     card.appendChild(metrics);
@@ -897,17 +967,17 @@ function renderHistory() {
 
     if (run.issues && run.issues.length) {
       const issue = document.createElement("div");
-      issue.className = "issue";
+      issue.className = CLASSES.issue;
       issue.textContent = run.issues[0];
       card.appendChild(issue);
     }
 
     const actions = document.createElement("div");
-    actions.className = "card-actions";
+    actions.className = CLASSES.cardActionsSeparated;
 
     const compareButton = document.createElement("button");
     compareButton.type = "button";
-    compareButton.className = `card-button primary ${state.selectedRunIds[0] === run.run_id ? "selected" : ""}`.trim();
+    compareButton.className = cardButtonClass({ primary: true, selected: state.selectedRunIds[0] === run.run_id });
     compareButton.textContent = state.selectedRunIds[0] === run.run_id ? "Viewing" : "View Details";
     compareButton.addEventListener("click", () => focusRun(run.run_id));
     actions.appendChild(compareButton);
@@ -915,7 +985,7 @@ function renderHistory() {
     if (state.selectedRunIds[0] !== run.run_id) {
       const comparisonButton = document.createElement("button");
       comparisonButton.type = "button";
-      comparisonButton.className = `card-button ${state.selectedRunIds.includes(run.run_id) ? "selected" : ""}`.trim();
+      comparisonButton.className = cardButtonClass({ selected: state.selectedRunIds.includes(run.run_id) });
       comparisonButton.textContent = state.selectedRunIds.includes(run.run_id) ? "Remove Compare" : "Compare";
       comparisonButton.addEventListener("click", () => toggleComparisonRun(run.run_id));
       actions.appendChild(comparisonButton);
@@ -924,7 +994,7 @@ function renderHistory() {
     if (run.run_id !== state.bestRunId && state.bestRunId) {
       const bestButton = document.createElement("button");
       bestButton.type = "button";
-      bestButton.className = "card-button";
+      bestButton.className = cardButtonClass();
       bestButton.textContent = "With Best";
       bestButton.addEventListener("click", () => compareWithBest(run.run_id));
       actions.appendChild(bestButton);
@@ -945,10 +1015,16 @@ async function refreshAll(options = {}) {
     await loadExperiments();
     await loadRuns();
   } catch (error) {
-    bestRunCard.className = "empty-state";
+    bestRunCard.className = CLASSES.emptyState;
     bestRunCard.textContent = error.message;
-    compareGrid.innerHTML = '<div class="empty-state">Failed to load run data.</div>';
-    historyGrid.innerHTML = '<div class="empty-state">Failed to load run data.</div>';
+    compareGrid.innerHTML = "";
+    historyGrid.innerHTML = "";
+    [compareGrid, historyGrid].forEach((target) => {
+      const empty = document.createElement("div");
+      empty.className = CLASSES.emptyState;
+      empty.textContent = "Failed to load run data.";
+      target.appendChild(empty);
+    });
   } finally {
     if (!silent) {
       refreshButton.disabled = false;

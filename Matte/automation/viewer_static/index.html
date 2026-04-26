@@ -4,87 +4,101 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CCA Run Timing Viewer</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-  <div class="page-shell">
-    <header class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow">Automation Runs</p>
-        <h1>Run Timing Viewer</h1>
-        <p class="hero-text">
+<body class="min-h-screen">
+  <div
+    x-data="{ density: 'comfortable' }"
+    :class="{ 'density-comfortable': density === 'comfortable' }"
+    class="relative z-10 mx-auto w-[min(1380px,calc(100vw-32px))] py-8 pb-16 max-[720px]:w-[calc(100vw-18px)] max-[720px]:pt-5"
+  >
+    <header class="mb-7 flex items-end justify-between gap-6 max-[1080px]:flex-col max-[1080px]:items-start">
+      <div>
+        <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Automation Runs</p>
+        <h1 class="m-0 font-serif text-[clamp(2.2rem,4vw,4rem)] font-semibold leading-none tracking-[-0.03em]">Run Timing Viewer</h1>
+        <p class="mt-3 max-w-[720px] text-[var(--muted)] leading-6">
           Inspect one run in detail, then add a second run only when you want a shared-axis comparison.
         </p>
       </div>
-      <div class="hero-actions">
-        <button id="refresh-button" class="ghost-button" type="button">Refresh Data</button>
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          id="refresh-button"
+          class="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-900/15 bg-white/75 px-5 py-3 text-sm font-bold text-[var(--page-ink)] shadow-sm transition hover:-translate-y-px hover:bg-white focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)] disabled:cursor-wait disabled:opacity-65"
+          type="button"
+        >
+          Refresh Data
+        </button>
       </div>
     </header>
 
-    <section class="toolbar panel">
-      <label class="field">
-        <span>Experiment</span>
-        <select id="experiment-select"></select>
+    <section class="mb-6 grid grid-cols-4 gap-4 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[1080px]:grid-cols-1 max-[720px]:p-3.5">
+      <label class="flex flex-col gap-2">
+        <span class="text-[0.82rem] uppercase tracking-[0.08em] text-[var(--muted)]">Experiment</span>
+        <select id="experiment-select" class="min-h-[50px] w-full rounded-xl border border-slate-900/15 bg-white/75 px-3.5 py-3 text-[var(--page-ink)] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]"></select>
       </label>
-      <label class="field">
-        <span>Status</span>
-        <select id="status-filter">
+      <label class="flex flex-col gap-2">
+        <span class="text-[0.82rem] uppercase tracking-[0.08em] text-[var(--muted)]">Status</span>
+        <select id="status-filter" class="min-h-[50px] w-full rounded-xl border border-slate-900/15 bg-white/75 px-3.5 py-3 text-[var(--page-ink)] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]">
           <option value="all">All statuses</option>
         </select>
       </label>
-      <label class="field search-field">
-        <span>Policy or run</span>
-        <input id="search-input" type="search" placeholder="Search by run id or policy">
+      <label class="flex flex-col gap-2">
+        <span class="text-[0.82rem] uppercase tracking-[0.08em] text-[var(--muted)]">Policy or run</span>
+        <input id="search-input" class="min-h-[50px] w-full rounded-xl border border-slate-900/15 bg-white/75 px-3.5 py-3 text-[var(--page-ink)] placeholder:text-slate-400 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]" type="search" placeholder="Search by run id or policy">
       </label>
-      <div class="field compact">
-        <span>Selected</span>
-        <div class="selection-meta">
+      <div class="flex flex-col gap-2">
+        <span class="text-[0.82rem] uppercase tracking-[0.08em] text-[var(--muted)]">Selected</span>
+        <div class="flex min-h-[50px] items-center justify-between gap-3 rounded-xl border border-slate-900/15 bg-white/75 px-3.5 py-3">
           <strong id="selection-count">0 / 2</strong>
-          <button id="clear-selection-button" class="text-button" type="button">Clear</button>
+          <button id="clear-selection-button" class="inline-flex items-center justify-center py-1 text-sm font-bold text-[var(--accent-deep)] transition hover:-translate-y-px focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]" type="button">Clear</button>
         </div>
       </div>
     </section>
 
-    <section class="stats-grid" id="stats-grid"></section>
+    <section class="mb-6 grid grid-cols-4 gap-4 max-[1080px]:grid-cols-1" id="stats-grid"></section>
 
-    <section class="panel best-panel">
-      <div class="section-head">
+    <section class="mb-6 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
+      <div class="mb-5 flex items-end justify-between gap-6 max-[720px]:flex-col max-[720px]:items-start">
         <div>
-          <p class="section-kicker">Pinned Result</p>
-          <h2>Best Run</h2>
+          <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Pinned Result</p>
+          <h2 class="m-0 font-serif text-3xl font-semibold tracking-[-0.03em]">Best Run</h2>
         </div>
       </div>
-      <div id="best-run-card" class="empty-state">Loading best run...</div>
+      <div id="best-run-card" class="empty-state rounded-2xl bg-white/60 p-5 text-[var(--muted)]">Loading best run...</div>
     </section>
 
-    <section class="panel compare-panel">
-      <div class="section-head">
+    <section class="mb-6 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
+      <div class="mb-5 flex items-end justify-between gap-6 max-[720px]:flex-col max-[720px]:items-start">
         <div>
-          <p class="section-kicker">Selected Run</p>
-          <h2>Run Detail</h2>
+          <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Selected Run</p>
+          <h2 class="m-0 font-serif text-3xl font-semibold tracking-[-0.03em]">Run Detail</h2>
         </div>
-        <p id="compare-note" class="section-note">Pick one run to inspect; add a second run to compare.</p>
+        <p id="compare-note" class="mt-2.5 max-w-[720px] text-[var(--muted)] leading-6" aria-live="polite">
+          Pick one run for a full timeline; add a second to compare both on the same time scale.
+        </p>
       </div>
-      <div id="compare-grid" class="compare-grid"></div>
+      <div id="compare-grid" class="grid gap-6"></div>
     </section>
 
-    <section class="panel history-panel">
-      <div class="section-head">
+    <section class="mb-6 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
+      <div class="mb-5 flex items-end justify-between gap-6 max-[720px]:flex-col max-[720px]:items-start">
         <div>
-          <p class="section-kicker">All History</p>
-          <h2>Past Submissions</h2>
+          <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">All History</p>
+          <h2 class="m-0 font-serif text-3xl font-semibold tracking-[-0.03em]">Past Submissions</h2>
         </div>
-        <p id="history-count" class="section-note"></p>
+        <p id="history-count" class="mt-2.5 max-w-[720px] text-[var(--muted)] leading-6" aria-live="polite"></p>
       </div>
-      <div id="history-grid" class="history-grid"></div>
+      <div id="history-grid" class="grid grid-cols-2 gap-5 max-[1080px]:grid-cols-1"></div>
     </section>
   </div>
 
   <template id="stat-card-template">
-    <article class="stat-card">
-      <p class="stat-label"></p>
-      <p class="stat-value"></p>
-      <p class="stat-detail"></p>
+    <article class="rounded-[20px] border border-slate-900/10 bg-[#fffbf5]/85 p-5 shadow-[var(--shadow)]">
+      <p class="m-0 text-xs uppercase tracking-[0.12em] text-[var(--muted)] stat-label"></p>
+      <p class="my-2.5 text-[clamp(1.7rem,2.8vw,2.4rem)] font-bold leading-none stat-value"></p>
+      <p class="m-0 text-[var(--muted)] stat-detail"></p>
     </article>
   </template>
 
