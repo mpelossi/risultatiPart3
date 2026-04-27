@@ -1,4 +1,4 @@
-policy_name: "ultimate-6-2-split"
+policy_name: "6barnes-2radix-1-vipsOnB"
 memcached:
   node: "node-b-4core"
   cores: "0"

@@ -19,6 +19,7 @@ from Matte.automation.config import (
 )
 from Matte.automation.runner import ExperimentRunner
 from Matte.automation.tests.helpers import temp_workspace, write_json_config
+from Matte.automation.utils import CommandResult
 
 
 BASE_POLICY = "/home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/schedule.yaml"
@@ -65,6 +66,29 @@ class FakeCluster:
         self.precache_wait_calls: list[tuple[str, tuple[str, ...], int]] = []
         self.precache_deleted_selectors: list[tuple[str, int]] = []
         self.precache_wait_error: Exception | None = None
+        self.node_platforms_error: Exception | None = None
+        self.node_platform_capture_calls: list[dict[str, NodeInfo] | None] = []
+        self.node_platforms_payload: dict[str, object] = {
+            "capture_status": "ok",
+            "zone": "europe-west1-b",
+            "nodes": {
+                "node-a-8core": {
+                    "capture_status": "ok",
+                    "node_type": "node-a-8core",
+                    "node_name": "node-a-8core-node",
+                    "machine_type": "e2-standard-8",
+                    "cpu_platform": "Intel Broadwell",
+                },
+                "node-b-4core": {
+                    "capture_status": "ok",
+                    "node_type": "node-b-4core",
+                    "node_name": "node-b-4core-node",
+                    "machine_type": "n2d-highcpu-4",
+                    "cpu_platform": "AMD Milan",
+                },
+            },
+            "errors": [],
+        }
         self.base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     def cleanup_managed_workloads(self) -> None:
@@ -118,6 +142,16 @@ class FakeCluster:
             "client-agent-b": NodeInfo("client-agent-b-node", "client-agent-b", "10.0.0.12", None),
             "client-measure": NodeInfo("client-measure-node", "client-measure", "10.0.0.13", None),
         }
+
+    def capture_benchmark_node_platforms(
+        self,
+        *,
+        nodes: dict[str, NodeInfo] | None = None,
+    ) -> dict[str, object]:
+        self.node_platform_capture_calls.append(nodes)
+        if self.node_platforms_error is not None:
+            raise self.node_platforms_error
+        return json.loads(json.dumps(self.node_platforms_payload))
 
     def get_run_jobs_snapshot(self, run_id: str) -> dict[str, dict[str, object]]:
         snapshots: dict[str, dict[str, object]] = {}
@@ -251,6 +285,58 @@ class FakeCluster:
         return {"kind": kind, "name": name, "labels": labels}
 
 
+class FakeAgentGateCluster:
+    def __init__(
+        self,
+        active_sequences: dict[str, list[bool]],
+        *,
+        restart_returncodes: dict[str, int] | None = None,
+    ):
+        self.active_sequences = active_sequences
+        self.restart_returncodes = restart_returncodes or {}
+        self.active_checks: dict[str, int] = {}
+        self.restart_calls: list[str] = []
+        self.commands: list[tuple[str, str]] = []
+
+    def ssh(self, node_name: str, command: str, *, check: bool = True) -> CommandResult:
+        self.commands.append((node_name, command))
+        if "systemctl is-active --quiet mcperf-agent.service" in command:
+            count = self.active_checks.get(node_name, 0)
+            self.active_checks[node_name] = count + 1
+            sequence = self.active_sequences.get(node_name, [True])
+            is_active = sequence[min(count, len(sequence) - 1)]
+            return CommandResult(
+                args=[],
+                returncode=0 if is_active else 3,
+                stdout="active\n" if is_active else "inactive\n",
+                stderr="",
+            )
+        if "systemctl restart mcperf-agent.service" in command:
+            self.restart_calls.append(node_name)
+            returncode = self.restart_returncodes.get(node_name, 0)
+            return CommandResult(
+                args=[],
+                returncode=returncode,
+                stdout=f"restart_returncode={returncode}\n",
+                stderr="",
+            )
+        if "systemctl status mcperf-agent.service" in command and "journalctl" in command:
+            return CommandResult(
+                args=[],
+                returncode=0,
+                stdout=(
+                    "--- systemctl status mcperf-agent.service ---\n"
+                    "status output\n"
+                    "--- journalctl -u mcperf-agent.service ---\n"
+                    "journal output\n"
+                    "--- pgrep -a mcperf ---\n"
+                    "pgrep output\n"
+                ),
+                stderr="",
+            )
+        return CommandResult(args=[], returncode=0, stdout="", stderr="")
+
+
 class FakeMeasurementRunner(ExperimentRunner):
     def __init__(
         self,
@@ -265,10 +351,10 @@ class FakeMeasurementRunner(ExperimentRunner):
         self.measurement_finish_s = measurement_finish_s
         self.measurement_shutdown_s = measurement_shutdown_s
         self.measurement_events: list[tuple[str, float]] = []
-        self.agent_restart_events: list[float] = []
+        self.agent_gate_events: list[float] = []
 
-    def _restart_mcperf_agents(self, *, nodes: dict[str, object], log_path: Path) -> None:  # type: ignore[override]
-        self.agent_restart_events.append(self.clock.now)
+    def _ensure_mcperf_agents_active(self, *, nodes: dict[str, object], log_path: Path) -> None:  # type: ignore[override]
+        self.agent_gate_events.append(self.clock.now)
 
     def _start_measurement(self, *, run_dir: Path, **kwargs):  # type: ignore[override]
         (run_dir / "mcperf.txt").write_text("#type p95\nread 500\n", encoding="utf-8")
@@ -398,6 +484,15 @@ class RunnerDryRunTests(unittest.TestCase):
 
 
 class RunnerAsyncSchedulerTests(unittest.TestCase):
+    def _agent_nodes(self) -> dict[str, NodeInfo]:
+        return {
+            "client-agent-a": NodeInfo("client-agent-a-node", "client-agent-a", "10.0.0.11", None),
+            "client-agent-b": NodeInfo("client-agent-b-node", "client-agent-b", "10.0.0.12", None),
+        }
+
+    def _run_real_agent_gate(self, runner: ExperimentRunner, *, log_path: Path) -> None:
+        ExperimentRunner._ensure_mcperf_agents_active(runner, nodes=self._agent_nodes(), log_path=log_path)
+
     def _write_experiment(self, root: Path):
         experiment_path = root / "experiment.yaml"
         write_json_config(
@@ -451,6 +546,90 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
         )
         runner.cluster = cluster
         return runner, cluster
+
+    def test_mcperf_agent_gate_restarts_agents_even_when_active(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, _cluster = self._build_runner(root, phases=[], outcomes={})
+            agent_cluster = FakeAgentGateCluster(
+                {
+                    "client-agent-a-node": [True],
+                    "client-agent-b-node": [True],
+                }
+            )
+            runner.cluster = agent_cluster  # type: ignore[assignment]
+            log_path = root / "events.log"
+
+            self._run_real_agent_gate(runner, log_path=log_path)
+
+            self.assertEqual(agent_cluster.restart_calls, ["client-agent-a-node", "client-agent-b-node"])
+            events_log = log_path.read_text(encoding="utf-8")
+            self.assertIn("Restarting mcperf-agent.service on client-agent-a", events_log)
+            self.assertIn("Restarting mcperf-agent.service on client-agent-b", events_log)
+            self.assertIn("mcperf-agent.service active on client-agent-a", events_log)
+            self.assertIn("mcperf-agent.service active on client-agent-b", events_log)
+
+    def test_mcperf_agent_gate_restarts_inactive_agent_and_accepts_active(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, _cluster = self._build_runner(root, phases=[], outcomes={})
+            agent_cluster = FakeAgentGateCluster(
+                {
+                    "client-agent-a-node": [False, True],
+                    "client-agent-b-node": [True],
+                }
+            )
+            runner.cluster = agent_cluster  # type: ignore[assignment]
+            log_path = root / "events.log"
+
+            self._run_real_agent_gate(runner, log_path=log_path)
+
+            self.assertEqual(agent_cluster.restart_calls, ["client-agent-a-node", "client-agent-b-node"])
+            events_log = log_path.read_text(encoding="utf-8")
+            self.assertIn("Restarting mcperf-agent.service on client-agent-a", events_log)
+            self.assertIn("mcperf-agent.service active on client-agent-a", events_log)
+
+    def test_mcperf_agent_gate_tolerates_restart_error_if_agent_becomes_active(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, _cluster = self._build_runner(root, phases=[], outcomes={})
+            agent_cluster = FakeAgentGateCluster(
+                {
+                    "client-agent-a-node": [False, True],
+                    "client-agent-b-node": [True],
+                },
+                restart_returncodes={"client-agent-a-node": 1},
+            )
+            runner.cluster = agent_cluster  # type: ignore[assignment]
+            log_path = root / "events.log"
+
+            self._run_real_agent_gate(runner, log_path=log_path)
+
+            self.assertEqual(agent_cluster.restart_calls, ["client-agent-a-node", "client-agent-b-node"])
+            self.assertIn("Warning: mcperf-agent.service restart command returned nonzero", log_path.read_text())
+
+    def test_mcperf_agent_gate_reports_diagnostics_when_agent_never_becomes_active(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, _cluster = self._build_runner(root, phases=[], outcomes={})
+            runner.mcperf_agent_start_timeout_s = 2.0
+            agent_cluster = FakeAgentGateCluster(
+                {
+                    "client-agent-a-node": [False],
+                    "client-agent-b-node": [True],
+                }
+            )
+            runner.cluster = agent_cluster  # type: ignore[assignment]
+
+            with self.assertRaises(RuntimeError) as raised:
+                self._run_real_agent_gate(runner, log_path=root / "events.log")
+
+            message = str(raised.exception)
+            self.assertIn("mcperf-agent.service did not become active on client-agent-a", message)
+            self.assertIn("systemctl status mcperf-agent.service", message)
+            self.assertIn("journalctl -u mcperf-agent.service", message)
+            self.assertIn("pgrep -a mcperf", message)
+            self.assertEqual(agent_cluster.restart_calls, ["client-agent-a-node"])
 
     def _run_once(self, runner: ExperimentRunner, *, precache: bool = False) -> Path:
         with patch("Matte.automation.runner.assert_client_provisioning"), patch(
@@ -660,7 +839,7 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
             self.assertEqual(len(run_dirs), 2)
             self.assertEqual(len(cluster.precache_wait_calls), 1)
 
-    def test_run_batch_restarts_mcperf_agents_before_every_measurement(self) -> None:
+    def test_run_batch_checks_mcperf_agents_before_every_measurement(self) -> None:
         with temp_workspace() as workspace:
             root = Path(workspace)
             runner, _cluster = self._build_runner(
@@ -678,9 +857,9 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
                 run_dirs = runner.run_batch(2)
 
             self.assertEqual(len(run_dirs), 2)
-            self.assertEqual(len(runner.agent_restart_events), 2)
-            self.assertLessEqual(runner.agent_restart_events[0], runner.measurement_events[0][1])
-            self.assertLessEqual(runner.agent_restart_events[1], runner.measurement_events[3][1])
+            self.assertEqual(len(runner.agent_gate_events), 2)
+            self.assertLessEqual(runner.agent_gate_events[0], runner.measurement_events[0][1])
+            self.assertLessEqual(runner.agent_gate_events[1], runner.measurement_events[3][1])
 
     def test_intentional_measurement_shutdown_still_summarizes_as_pass(self) -> None:
         with temp_workspace() as workspace:
@@ -710,6 +889,46 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
             run_dir = self._run_once_with_real_summary(runner)
 
             self.assertTrue((run_dir / "results.json").exists())
+
+    def test_real_run_writes_node_platforms_artifact_and_summary(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+
+            run_dir = self._run_once_with_real_summary(runner)
+
+            artifact = json.loads((run_dir / "node_platforms.json").read_text(encoding="utf-8"))
+            summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(artifact["capture_status"], "ok")
+            self.assertEqual(artifact["nodes"]["node-b-4core"]["cpu_platform"], "AMD Milan")
+            self.assertEqual(summary["node_platforms"], artifact)
+            self.assertEqual(len(cluster.node_platform_capture_calls), 1)
+
+    def test_node_platform_capture_failure_is_diagnostic(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+            cluster.node_platforms_error = RuntimeError("gcloud unavailable")
+
+            run_dir = self._run_once_with_real_summary(runner)
+
+            artifact = json.loads((run_dir / "node_platforms.json").read_text(encoding="utf-8"))
+            summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(artifact["capture_status"], "error")
+            self.assertIn("gcloud unavailable", artifact["errors"][0])
+            self.assertEqual(summary["node_platforms"], artifact)
+            self.assertIn(
+                "Warning: failed to capture benchmark node CPU platforms",
+                (run_dir / "events.log").read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

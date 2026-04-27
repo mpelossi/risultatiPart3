@@ -1,0 +1,41 @@
+policy_name: "memA-the-grid-fragmentation"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+  canneal:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "barnes"
+  barnes:
+    node: "node-b-4core"
+    cores: "2"
+    threads: 1
+    after: "start"
+  vips:
+    node: "node-b-4core"
+    cores: "2"
+    threads: 1
+    after: "radix"
+  radix:
+    node: "node-b-4core"
+    cores: "3"
+    threads: 1
+    after: "start"
