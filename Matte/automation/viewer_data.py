@@ -74,6 +74,7 @@ def _build_run_view(run_dir: Path, *, experiment_id: str) -> dict[str, object]:
     pods_path = run_dir / "pods.json"
     policy_path = run_dir / "policy.yaml"
     mcperf_path = run_dir / "mcperf.txt"
+    node_platforms_path = run_dir / "node_platforms.json"
     snapshot_path = _existing_snapshot_path(run_dir)
 
     artifact_flags: dict[str, bool] = {
@@ -82,6 +83,7 @@ def _build_run_view(run_dir: Path, *, experiment_id: str) -> dict[str, object]:
         "pods": pods_path.exists(),
         "policy": policy_path.exists(),
         "mcperf": mcperf_path.exists(),
+        "node_platforms": node_platforms_path.exists(),
         "snapshot": snapshot_path is not None,
     }
     issues: list[str] = []
@@ -159,6 +161,22 @@ def _build_run_view(run_dir: Path, *, experiment_id: str) -> dict[str, object]:
 
     payload = load_pod_payload(snapshot_path) if snapshot_path is not None else None
     memcached_timing = _extract_memcached_timing(payload) if payload is not None else None
+    node_platforms = None
+    raw_node_platforms = summary_payload.get("node_platforms")
+    if isinstance(raw_node_platforms, dict):
+        node_platforms = raw_node_platforms
+    elif raw_node_platforms is not None:
+        issues.append("summary.json node_platforms does not contain an object.")
+    if node_platforms is None and node_platforms_path.exists():
+        try:
+            loaded_node_platforms = json.loads(node_platforms_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            issues.append(f"node_platforms.json could not be parsed: {exc}")
+        else:
+            if isinstance(loaded_node_platforms, dict):
+                node_platforms = loaded_node_platforms
+            else:
+                issues.append("node_platforms.json does not contain an object.")
 
     jobs = _build_jobs_view(
         summary_payload.get("jobs"),
@@ -213,6 +231,7 @@ def _build_run_view(run_dir: Path, *, experiment_id: str) -> dict[str, object]:
         "issues": _dedupe_preserve_order(issues),
         "jobs": jobs,
         "timeline": timeline,
+        "node_platforms": node_platforms,
         "run_dir": str(run_dir),
     }
     return run_view

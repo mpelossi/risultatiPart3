@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CCA Schedule Planner</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="min-h-screen">
+  <div class="relative z-10 mx-auto w-[min(1480px,calc(100vw-32px))] py-8 pb-16 max-[720px]:w-[calc(100vw-18px)] max-[720px]:pt-5">
+    <header class="mb-7 flex items-end justify-between gap-6 max-[1080px]:flex-col max-[1080px]:items-start">
+      <div>
+        <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Automation Schedules</p>
+        <h1 class="m-0 font-serif text-[clamp(2.2rem,4vw,4rem)] font-semibold leading-none tracking-[-0.03em]">Schedule Planner</h1>
+        <p class="mt-3 max-w-[760px] text-[var(--muted)] leading-6">
+          Load schedule YAMLs, edit the theoretical policy, inspect the predicted timeline, then copy the generated YAML.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <a class="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-900/15 bg-white/80 px-5 py-3 text-sm font-bold text-[var(--page-ink)] shadow-sm transition hover:-translate-y-px hover:bg-white" href="/">Run Viewer</a>
+        <button id="refresh-button" class="inline-flex min-h-11 items-center justify-center rounded-full border border-emerald-800/80 bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-px hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-65" type="button">Refresh</button>
+        <button id="copy-button" class="inline-flex min-h-11 items-center justify-center rounded-full border border-amber-500/45 bg-amber-100/85 px-5 py-3 text-sm font-bold text-amber-950 shadow-sm transition hover:-translate-y-px hover:bg-amber-200/90 disabled:opacity-60" type="button">Copy YAML</button>
+      </div>
+    </header>
+
+    <section class="mb-6 grid grid-cols-[minmax(260px,1.2fr)_minmax(260px,2fr)] gap-4 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[980px]:grid-cols-1 max-[720px]:p-3.5">
+      <label class="flex flex-col gap-2">
+        <span class="text-[0.82rem] uppercase tracking-[0.08em] text-[var(--muted)]">Schedule</span>
+        <select id="schedule-select" class="min-h-[50px] w-full rounded-xl border border-slate-900/15 bg-white/75 px-3.5 py-3 text-[var(--page-ink)]"></select>
+      </label>
+      <div>
+        <span class="text-[0.82rem] uppercase tracking-[0.08em] text-[var(--muted)]">Queue</span>
+        <div id="queue-list" class="mt-2 flex min-h-[50px] flex-wrap items-center gap-2 rounded-xl border border-slate-900/15 bg-white/75 px-3.5 py-3 text-[var(--muted)]"></div>
+      </div>
+    </section>
+
+    <section class="mb-6 grid grid-cols-4 gap-4 max-[1080px]:grid-cols-2 max-[720px]:grid-cols-1" id="stats-grid"></section>
+
+    <section class="mb-6 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
+      <div class="mb-5 flex items-end justify-between gap-6 max-[720px]:flex-col max-[720px]:items-start">
+        <div>
+          <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Policy Editor</p>
+          <h2 class="m-0 font-serif text-3xl font-semibold tracking-[-0.03em]">Theoretical Schedule</h2>
+        </div>
+        <p id="dirty-note" class="mt-2.5 max-w-[720px] text-[var(--muted)] leading-6" aria-live="polite"></p>
+      </div>
+      <div id="editor-panel" class="grid gap-5"></div>
+    </section>
+
+    <section class="mb-6 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
+      <div class="mb-5 flex items-end justify-between gap-6 max-[720px]:flex-col max-[720px]:items-start">
+        <div>
+          <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Prediction</p>
+          <h2 class="m-0 font-serif text-3xl font-semibold tracking-[-0.03em]">Node Timelines</h2>
+        </div>
+      </div>
+      <div id="timeline-panel"></div>
+    </section>
+
+    <section class="grid grid-cols-[minmax(320px,1fr)_minmax(360px,1.2fr)] gap-6 max-[1080px]:grid-cols-1">
+      <article class="rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
+        <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Validation</p>
+        <h2 class="m-0 mb-5 font-serif text-3xl font-semibold tracking-[-0.03em]">Issues</h2>
+        <div id="issues-panel" class="grid gap-3"></div>
+      </article>
+      <article class="rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
+        <div class="mb-5 flex items-end justify-between gap-4 max-[720px]:flex-col max-[720px]:items-start">
+          <div>
+            <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Generated YAML</p>
+            <h2 class="m-0 font-serif text-3xl font-semibold tracking-[-0.03em]">Copy Buffer</h2>
+          </div>
+          <p id="copy-status" class="text-sm font-bold text-[var(--muted)]" aria-live="polite"></p>
+        </div>
+        <textarea id="yaml-output" class="min-h-[460px] w-full resize-y rounded-xl border border-slate-900/15 bg-slate-950 px-4 py-3 font-mono text-sm leading-6 text-slate-50 outline-none" readonly spellcheck="false"></textarea>
+      </article>
+    </section>
+  </div>
+
+  <template id="stat-card-template">
+    <article class="rounded-[20px] border border-slate-900/10 bg-[#fffbf5]/85 p-5 shadow-[var(--shadow)]">
+      <p class="m-0 text-xs uppercase tracking-[0.12em] text-[var(--muted)] stat-label"></p>
+      <p class="my-2.5 text-[clamp(1.5rem,2.4vw,2.1rem)] font-bold leading-none stat-value"></p>
+      <p class="m-0 text-[var(--muted)] stat-detail"></p>
+    </article>
+  </template>
+
+  <script src="/timeline.js"></script>
+  <script src="/schedules.js"></script>
+</body>
+</html>

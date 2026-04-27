@@ -5,9 +5,12 @@ const state = {
   filteredRuns: [],
   bestRunId: null,
   selectedRunIds: [],
+  previewRunIds: [],
   statusFilter: "all",
   searchText: "",
   hasPrimedSelection: false,
+  experimentsPayloadSignature: "",
+  runsPayloadSignature: "",
 };
 
 const statusFilter = document.getElementById("status-filter");
@@ -18,6 +21,7 @@ const statsGrid = document.getElementById("stats-grid");
 const bestRunCard = document.getElementById("best-run-card");
 const compareGrid = document.getElementById("compare-grid");
 const compareNote = document.getElementById("compare-note");
+const runDetailSection = document.getElementById("run-detail-section");
 const historyGrid = document.getElementById("history-grid");
 const historyCount = document.getElementById("history-count");
 const refreshButton = document.getElementById("refresh-button");
@@ -26,18 +30,27 @@ const statCardTemplate = document.getElementById("stat-card-template");
 const REFRESH_INTERVAL_MS = 5000;
 const MAX_SELECTED_RUNS = 2;
 const TIMELINE_SEGMENT_TOP_PX = 10;
-const TIMELINE_SEGMENT_ROW_HEIGHT_PX = 58;
-const TIMELINE_TRACK_MIN_HEIGHT_PX = 78;
+const TIMELINE_SEGMENT_ROW_HEIGHT_PX = 76;
+const TIMELINE_SEGMENT_MIN_HEIGHT_PX = 45;
+const TIMELINE_SEGMENT_MAX_HEIGHT_PX = 60;
+const TIMELINE_TRACK_MIN_HEIGHT_PX = 94;
 const TIMELINE_TRACK_BOTTOM_GAP_PX = 16;
 const TIMELINE_TRACK_MEMCACHED_GAP_PX = 52;
+const TIMELINE_MEMCACHED_HEIGHT_PX = 34;
+const NODE_CORE_CAPACITY = {
+  "node-a-8core": 8,
+  "node-b-4core": 4,
+};
+const timelineScrollPositions = new Map();
 const CLASSES = {
   emptyState: "empty-state rounded-2xl bg-white/60 p-5 text-[var(--muted)]",
   bestCard: "best-card best-highlight grid min-w-0 grid-cols-1 gap-5 rounded-[20px] border border-emerald-700/30 bg-white/75 p-5 shadow-[0_18px_40px_rgba(45,125,87,0.14)]",
   historyCard: "history-card flex min-w-0 flex-col rounded-[20px] border border-slate-900/10 bg-white/75 p-5 transition hover:-translate-y-0.5",
   compareCard: "compare-card flex min-w-0 flex-col gap-4 rounded-[20px] border border-slate-900/10 bg-white/75 p-5",
   bestHighlight: "best-highlight border-emerald-700/30 shadow-[0_18px_40px_rgba(45,125,87,0.14)]",
-  selectedHighlight: "selected-highlight shadow-[0_0_0_4px_var(--selected-ring),var(--shadow)]",
-  primaryDetail: "primary-detail border-emerald-700/25",
+  historyBestHighlight: "history-best-highlight border-emerald-700/60 bg-emerald-50/55 shadow-[0_18px_36px_rgba(21,128,61,0.16)]",
+  selectedHighlight: "selected-highlight border-emerald-700/70 bg-emerald-50/70 shadow-[0_0_0_5px_var(--selected-ring),0_22px_44px_rgba(21,128,61,0.18)]",
+  primaryDetail: "primary-detail border-emerald-700/45 bg-emerald-50/45",
   runHead: "flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-start",
   runTitle: "m-0 text-[1.2rem] font-bold leading-tight",
   runSubtitle: "mt-1.5 mb-0 text-[var(--muted)]",
@@ -49,12 +62,16 @@ const CLASSES = {
   metricValue: "mt-1.5 block text-[1.05rem] font-bold",
   badgeRow: "badge-row flex flex-wrap gap-2.5",
   badge: "badge inline-flex min-h-[30px] items-center rounded-full bg-slate-900/10 px-2.5 py-1.5 text-[0.82rem] text-[var(--page-ink)]",
+  bestPill: "best-pill inline-flex min-h-[30px] items-center rounded-full bg-emerald-700 px-2.5 py-1.5 text-[0.82rem] font-bold uppercase tracking-[0.06em] text-white shadow-[0_8px_20px_rgba(21,128,61,0.2)]",
   issueRow: "issue-row flex flex-wrap gap-2.5",
   issue: "issue mt-2.5 rounded-[14px] bg-[rgba(196,77,43,0.08)] px-3 py-2.5 text-[var(--accent-deep)]",
   cardActions: "card-actions mt-4 flex flex-wrap items-center gap-3",
   cardActionsSeparated: "card-actions mt-auto flex flex-wrap items-center gap-3 border-t border-slate-900/10 pt-4",
-  cardButton: "card-button inline-flex min-h-[42px] items-center justify-center rounded-full bg-slate-900/10 px-4 py-2.5 text-[var(--page-ink)] transition hover:-translate-y-px focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]",
-  primaryButton: "bg-[var(--accent)] text-white",
+  cardButton: "card-button inline-flex min-h-[42px] items-center justify-center rounded-full border px-4 py-2.5 text-sm font-bold shadow-sm transition hover:-translate-y-px focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]",
+  primaryButton: "border-emerald-800/80 bg-emerald-700 text-white hover:bg-emerald-800",
+  compareButton: "border-amber-500/45 bg-amber-100/85 text-amber-950 hover:bg-amber-200/90",
+  neutralButton: "border-slate-900/15 bg-white/80 text-[var(--page-ink)] hover:bg-white",
+  selectedButton: "selected border-emerald-800 bg-emerald-700 text-white shadow-[0_0_0_3px_var(--selected-ring)] hover:bg-emerald-800",
   finePrint: "mt-3 text-[0.84rem] text-[var(--muted)]",
 };
 
@@ -79,6 +96,8 @@ const JOB_SHORT_LABELS = {
   streamcluster: "stream",
   vips: "vips",
 };
+
+const BENCHMARK_NODE_IDS = ["node-a-8core", "node-b-4core"];
 
 function fmtSeconds(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -150,6 +169,37 @@ function compactResourceLabel(segment) {
   return `${coreText}/${threadText}`;
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function laneCoreCapacity(laneId) {
+  return NODE_CORE_CAPACITY[laneId] || null;
+}
+
+function segmentHeightPx(segment, laneId) {
+  if (text(segment.kind, "job") === "memcached") {
+    return TIMELINE_MEMCACHED_HEIGHT_PX;
+  }
+
+  const count = coreCount(segment);
+  const capacity = laneCoreCapacity(laneId);
+  if (count === null || capacity === null) {
+    return Math.round((TIMELINE_SEGMENT_MIN_HEIGHT_PX + TIMELINE_SEGMENT_MAX_HEIGHT_PX) / 2);
+  }
+
+  const ratio = clampNumber(count / capacity, 0, 1);
+  return Math.round(
+    TIMELINE_SEGMENT_MIN_HEIGHT_PX
+      + ratio * (TIMELINE_SEGMENT_MAX_HEIGHT_PX - TIMELINE_SEGMENT_MIN_HEIGHT_PX),
+  );
+}
+
+function segmentTopPx(rowIndex, height) {
+  const centeredOffset = Math.max(0, Math.round((TIMELINE_SEGMENT_MAX_HEIGHT_PX - height) / 2));
+  return TIMELINE_SEGMENT_TOP_PX + rowIndex * TIMELINE_SEGMENT_ROW_HEIGHT_PX + centeredOffset;
+}
+
 function statusClass(status) {
   const normalized = text(status, "unknown").toLowerCase();
   return `status-${normalized.replace(/[^a-z0-9]+/g, "_")}`;
@@ -159,6 +209,52 @@ function cx(...values) {
   return values.filter(Boolean).join(" ");
 }
 
+function stableSignature(value) {
+  return JSON.stringify(value);
+}
+
+function rememberTimelineScrollPositions() {
+  document.querySelectorAll(".timeline-scroll[data-scroll-key]").forEach((scroller) => {
+    timelineScrollPositions.set(scroller.dataset.scrollKey, scroller.scrollLeft);
+  });
+}
+
+function restoreTimelineScrollPositions() {
+  document.querySelectorAll(".timeline-scroll[data-scroll-key]").forEach((scroller) => {
+    const savedScrollLeft = timelineScrollPositions.get(scroller.dataset.scrollKey);
+    if (savedScrollLeft === undefined) {
+      return;
+    }
+    const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    scroller.scrollLeft = Math.min(savedScrollLeft, maxScrollLeft);
+  });
+}
+
+function afterLayoutSettles(callback) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(callback);
+  });
+}
+
+function rememberTimelineScroll(event) {
+  const scroller = event.currentTarget;
+  if (scroller.dataset.scrollKey) {
+    timelineScrollPositions.set(scroller.dataset.scrollKey, scroller.scrollLeft);
+  }
+}
+
+function scrollToRunDetail() {
+  if (!runDetailSection) {
+    return;
+  }
+  const top = runDetailSection.getBoundingClientRect().top + window.scrollY - 18;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({
+    top: Math.max(0, top),
+    behavior: reduceMotion ? "auto" : "smooth",
+  });
+}
+
 function statusPillClass(status) {
   return cx(
     "status-pill inline-flex min-h-[30px] items-center rounded-full px-2.5 py-1.5 text-[0.82rem] font-bold uppercase tracking-[0.06em] text-white",
@@ -166,11 +262,25 @@ function statusPillClass(status) {
   );
 }
 
+function createBestPill() {
+  const pill = document.createElement("span");
+  pill.className = CLASSES.bestPill;
+  pill.textContent = "best";
+  return pill;
+}
+
 function cardButtonClass(options = {}) {
+  const variant = options.variant || (options.primary ? "primary" : "neutral");
+  const variantClass = {
+    primary: CLASSES.primaryButton,
+    compare: CLASSES.compareButton,
+    neutral: CLASSES.neutralButton,
+  }[variant] || CLASSES.neutralButton;
+
   return cx(
     CLASSES.cardButton,
-    options.primary ? CLASSES.primaryButton : "",
-    options.selected ? "selected" : "",
+    variantClass,
+    options.selected ? CLASSES.selectedButton : "",
   );
 }
 
@@ -207,8 +317,14 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function loadExperiments() {
+async function loadExperiments(options = {}) {
   const payload = await fetchJson("/api/experiments");
+  const payloadSignature = stableSignature(payload);
+  if (options.silent && payloadSignature === state.experimentsPayloadSignature) {
+    return false;
+  }
+
+  state.experimentsPayloadSignature = payloadSignature;
   state.experiments = payload.experiments || [];
 
   experimentSelect.innerHTML = "";
@@ -225,22 +341,31 @@ async function loadExperiments() {
   if (state.experimentId) {
     experimentSelect.value = state.experimentId;
   }
+  return true;
 }
 
-async function loadRuns() {
+async function loadRuns(options = {}) {
   if (!state.experimentId) {
     state.runs = [];
     state.filteredRuns = [];
     render();
-    return;
+    return true;
   }
   const payload = await fetchJson(`/api/runs?experiment=${encodeURIComponent(state.experimentId)}`);
+  const payloadSignature = stableSignature(payload);
+  if (options.silent && payloadSignature === state.runsPayloadSignature) {
+    return false;
+  }
+
+  state.runsPayloadSignature = payloadSignature;
   state.runs = payload.runs || [];
   state.bestRunId = payload.best_run_id || null;
+  state.previewRunIds = state.previewRunIds.filter((runId) => state.runs.some((run) => run.run_id === runId));
   resetStatusFilterOptions(state.runs);
   applyFilters();
   primeSelection();
   render();
+  return true;
 }
 
 function applyFilters() {
@@ -274,7 +399,7 @@ function primeSelection() {
 
 function focusRun(runId) {
   state.selectedRunIds = [runId];
-  render();
+  render({ scrollToDetail: true });
 }
 
 function toggleComparisonRun(runId) {
@@ -282,13 +407,13 @@ function toggleComparisonRun(runId) {
   const index = selected.indexOf(runId);
   if (index === 0) {
     state.selectedRunIds = selected;
-    render();
+    render({ scrollToDetail: true });
     return;
   }
   if (index > 0) {
     selected.splice(index, 1);
     state.selectedRunIds = selected;
-    render();
+    render({ scrollToDetail: true });
     return;
   }
 
@@ -297,7 +422,7 @@ function toggleComparisonRun(runId) {
   } else {
     state.selectedRunIds = [selected[0], runId].slice(0, MAX_SELECTED_RUNS);
   }
-  render();
+  render({ scrollToDetail: true });
 }
 
 function compareWithBest(runId) {
@@ -307,21 +432,42 @@ function compareWithBest(runId) {
   }
   selected.push(runId);
   state.selectedRunIds = selected.slice(0, MAX_SELECTED_RUNS);
-  render();
+  render({ scrollToDetail: true });
 }
 
 function removeSelectedRun(runId) {
   state.selectedRunIds = state.selectedRunIds.filter((selectedRunId) => selectedRunId !== runId);
+  render({ scrollToDetail: true });
+}
+
+function togglePreviewRun(runId) {
+  if (state.previewRunIds.includes(runId)) {
+    state.previewRunIds = state.previewRunIds.filter((previewRunId) => previewRunId !== runId);
+  } else {
+    state.previewRunIds = [...state.previewRunIds, runId];
+  }
   render();
 }
 
-function render() {
+function render(options = {}) {
+  const preserveTimelineScroll = options.preserveTimelineScroll !== false;
+  if (preserveTimelineScroll) {
+    rememberTimelineScrollPositions();
+  }
   renderStats();
   renderBestRun();
   renderCompare();
   renderHistory();
   selectionCount.textContent = `${state.selectedRunIds.length} / ${MAX_SELECTED_RUNS}`;
   historyCount.textContent = `${state.filteredRuns.length} shown out of ${state.runs.length}`;
+  afterLayoutSettles(() => {
+    if (preserveTimelineScroll) {
+      restoreTimelineScrollPositions();
+    }
+    if (options.scrollToDetail) {
+      scrollToRunDetail();
+    }
+  });
 }
 
 function renderStats() {
@@ -375,6 +521,9 @@ function createRunBadges(run) {
   if (run.artifact_flags && run.artifact_flags.pods) {
     badges.push("pods.json");
   }
+  if (run.artifact_flags && run.artifact_flags.node_platforms) {
+    badges.push("node platforms");
+  }
   if (run.artifact_flags && !run.artifact_flags.snapshot) {
     badges.push("missing pods");
   }
@@ -412,8 +561,15 @@ function renderBestRun() {
     return;
   }
 
-  bestRunCard.className = CLASSES.bestCard;
-  bestRunCard.appendChild(createRunSummaryBlock(run, { compact: false, includeTimeline: true }));
+  bestRunCard.className = cx(
+    CLASSES.bestCard,
+    state.selectedRunIds.includes(run.run_id) ? CLASSES.selectedHighlight : "",
+  );
+  bestRunCard.appendChild(createRunSummaryBlock(run, {
+    compact: false,
+    includeTimeline: true,
+    scrollKey: `best:${run.run_id}`,
+  }));
   bestRunCard.appendChild(createRunMetaBlock(run));
 }
 
@@ -476,7 +632,7 @@ function createRunSummaryBlock(run, options) {
 
   const compareButton = document.createElement("button");
   compareButton.type = "button";
-  compareButton.className = cardButtonClass({ primary: true, selected: state.selectedRunIds[0] === run.run_id });
+  compareButton.className = cardButtonClass({ variant: "primary", selected: state.selectedRunIds[0] === run.run_id });
   compareButton.textContent = state.selectedRunIds[0] === run.run_id ? "Viewing Details" : "View Details";
   compareButton.addEventListener("click", () => focusRun(run.run_id));
   actions.appendChild(compareButton);
@@ -484,7 +640,7 @@ function createRunSummaryBlock(run, options) {
   if (state.selectedRunIds[0] !== run.run_id) {
     const duoButton = document.createElement("button");
     duoButton.type = "button";
-    duoButton.className = cardButtonClass({ selected: state.selectedRunIds.includes(run.run_id) });
+    duoButton.className = cardButtonClass({ variant: "compare", selected: state.selectedRunIds.includes(run.run_id) });
     duoButton.textContent = state.selectedRunIds.includes(run.run_id) ? "Remove Compare" : "Compare";
     duoButton.addEventListener("click", () => toggleComparisonRun(run.run_id));
     actions.appendChild(duoButton);
@@ -493,7 +649,7 @@ function createRunSummaryBlock(run, options) {
   wrapper.appendChild(actions);
 
   if (options.includeTimeline) {
-    wrapper.appendChild(createTimelineCard(run, options.scaleMax));
+    wrapper.appendChild(createTimelineCard(run, options.scaleMax, { scrollKey: options.scrollKey }));
   }
 
   return wrapper;
@@ -526,6 +682,11 @@ function createRunMetaBlock(run) {
     metrics.appendChild(metric);
   });
   wrapper.appendChild(metrics);
+
+  const nodePlatformBlock = createNodePlatformBlock(run);
+  if (nodePlatformBlock) {
+    wrapper.appendChild(nodePlatformBlock);
+  }
 
   if (run.issues && run.issues.length) {
     const issueRow = document.createElement("div");
@@ -583,6 +744,7 @@ function renderCompare() {
       CLASSES.compareCard,
       index === 0 ? CLASSES.primaryDetail : "",
       run.run_id === state.bestRunId ? CLASSES.bestHighlight : "",
+      state.selectedRunIds.includes(run.run_id) ? CLASSES.selectedHighlight : "",
     );
 
     const head = document.createElement("div");
@@ -602,13 +764,20 @@ function renderCompare() {
       { label: "Measurement", value: text(run.measurement_status, "missing") },
     ]));
     renderBadges(card, run);
-    card.appendChild(createTimelineCard(run, scaleMax, { includeDetails: runs.length === 1 }));
+    const nodePlatformBlock = createNodePlatformBlock(run);
+    if (nodePlatformBlock) {
+      card.appendChild(nodePlatformBlock);
+    }
+    card.appendChild(createTimelineCard(run, scaleMax, {
+      includeDetails: runs.length === 1,
+      scrollKey: `compare:${run.run_id}`,
+    }));
 
     const actions = document.createElement("div");
     actions.className = CLASSES.cardActionsSeparated;
     const focusButton = document.createElement("button");
     focusButton.type = "button";
-    focusButton.className = cardButtonClass({ primary: true, selected: index === 0 });
+    focusButton.className = cardButtonClass({ variant: "primary", selected: index === 0 });
     focusButton.textContent = index === 0 ? "Viewing Details" : "View Details";
     focusButton.addEventListener("click", () => focusRun(run.run_id));
     actions.appendChild(focusButton);
@@ -646,7 +815,70 @@ function createMetricsGrid(items) {
   return metrics;
 }
 
+function nodePlatformEntries(run) {
+  const payload = run.node_platforms || {};
+  const nodes = payload.nodes && typeof payload.nodes === "object" ? payload.nodes : {};
+  return BENCHMARK_NODE_IDS
+    .map((nodeId) => ({ nodeId, data: nodes[nodeId] }))
+    .filter((entry) => entry.data && typeof entry.data === "object");
+}
+
+function createNodePlatformBlock(run) {
+  const entries = nodePlatformEntries(run);
+  if (!entries.length) {
+    return null;
+  }
+
+  const wrapper = document.createElement("div");
+  const title = document.createElement("p");
+  title.className = CLASSES.sectionNote;
+  title.textContent = "Benchmark nodes";
+  wrapper.appendChild(title);
+
+  const metrics = document.createElement("div");
+  metrics.className = CLASSES.metricsGridFlush;
+  entries.forEach(({ nodeId, data }) => {
+    const metric = document.createElement("div");
+    metric.className = CLASSES.metric;
+
+    const label = document.createElement("span");
+    label.className = CLASSES.metricLabel;
+    label.textContent = nodeId;
+    metric.appendChild(label);
+
+    const value = document.createElement("span");
+    value.className = CLASSES.metricValue;
+    value.textContent = data.capture_status === "error"
+      ? "capture error"
+      : text(data.cpu_platform, "CPU platform n/a");
+    metric.appendChild(value);
+
+    const detail = document.createElement("span");
+    detail.className = CLASSES.metricLabel;
+    detail.textContent = data.capture_status === "error"
+      ? text(data.error, "metadata unavailable")
+      : `${text(data.machine_type, "machine n/a")} | ${text(data.node_name, "node n/a")}`;
+    metric.appendChild(detail);
+
+    metrics.appendChild(metric);
+  });
+  wrapper.appendChild(metrics);
+  return wrapper;
+}
+
+function runHasTimelineData(run) {
+  return Boolean(run.timeline && run.timeline.has_data);
+}
+
 function createTimelineCard(run, explicitScaleMax, options = {}) {
+  if (window.CcaTimeline && window.CcaTimeline.createTimelineCard) {
+    return window.CcaTimeline.createTimelineCard(run, explicitScaleMax, {
+      ...options,
+      emptyClassName: CLASSES.emptyState,
+      emptyText: "This run does not have enough timing data to render a chart.",
+    });
+  }
+
   const includeDetails = options.includeDetails !== false;
   const container = document.createElement("div");
   container.className = "timeline-card";
@@ -663,6 +895,8 @@ function createTimelineCard(run, explicitScaleMax, options = {}) {
   const scaleMax = Math.max(Number(explicitScaleMax || 0), Number(timeline.max_end_s || 0), 1);
   const scroller = document.createElement("div");
   scroller.className = "timeline-scroll";
+  scroller.dataset.scrollKey = options.scrollKey || `timeline:${run.run_id}`;
+  scroller.addEventListener("scroll", rememberTimelineScroll, { passive: true });
   const chart = document.createElement("div");
   chart.className = "timeline-chart";
   chart.appendChild(createAxis(scaleMax));
@@ -740,10 +974,13 @@ function createLane(lane, scaleMax) {
     );
     track.style.minHeight = `${trackHeight}px`;
     layout.jobs.forEach((item) => {
-      track.appendChild(createSegment(item.segment, scaleMax, { rowIndex: item.rowIndex }));
+      track.appendChild(createSegment(item.segment, scaleMax, {
+        laneId: lane.lane_id,
+        rowIndex: item.rowIndex,
+      }));
     });
     layout.memcached.forEach((segment) => {
-      track.appendChild(createSegment(segment, scaleMax));
+      track.appendChild(createSegment(segment, scaleMax, { laneId: lane.lane_id }));
     });
   }
 
@@ -788,24 +1025,28 @@ function createSegment(segment, scaleMax, options = {}) {
   const bar = document.createElement("div");
   const kind = text(segment.kind, "job");
   const jobId = text(segment.job_id, "unknown");
+  const barHeight = segmentHeightPx(segment, options.laneId);
   const rawWidth = (Number(segment.duration_s || 0) / scaleMax) * 100;
   const width = Math.max(rawWidth, kind === "memcached" ? 0 : 12);
   const left = (Number(segment.start_s || 0) / scaleMax) * 100;
   const boundedWidth = Math.max(0, Math.min(width, 100 - left));
   const isTight = boundedWidth < 18 && kind !== "memcached";
+  const isShort = barHeight < 36 && kind !== "memcached";
   bar.className = [
     "segment",
     kind === "memcached" ? "memcached" : "",
     isTight ? "segment-tight" : "",
+    isShort ? "segment-short" : "",
     `job-${jobId}`,
   ].filter(Boolean).join(" ");
   bar.style.left = `${left}%`;
   bar.style.width = `${boundedWidth}%`;
+  bar.style.height = `${barHeight}px`;
   if (options.rowIndex !== undefined) {
     bar.style.setProperty("--segment-row", String(options.rowIndex));
     bar.style.setProperty(
       "--segment-top",
-      `${TIMELINE_SEGMENT_TOP_PX + options.rowIndex * TIMELINE_SEGMENT_ROW_HEIGHT_PX}px`,
+      `${segmentTopPx(options.rowIndex, barHeight)}px`,
     );
   }
   bar.title = [
@@ -934,19 +1175,34 @@ function renderHistory() {
     const card = document.createElement("article");
     card.className = cx(
       CLASSES.historyCard,
-      run.run_id === state.bestRunId ? CLASSES.bestHighlight : "",
+      run.run_id === state.bestRunId ? CLASSES.historyBestHighlight : "",
       state.selectedRunIds.includes(run.run_id) ? CLASSES.selectedHighlight : "",
     );
 
     const head = document.createElement("div");
     head.className = CLASSES.runHead;
-    head.innerHTML = `
-      <div>
-        <h3 class="${CLASSES.runTitle}">${text(run.run_label, run.run_id)}</h3>
-        <p class="${CLASSES.runSubtitle}">${text(run.policy_name)} | ${text(run.run_id)}</p>
-      </div>
-      <span class="${statusPillClass(run.overall_status)}">${text(run.overall_status, "unknown")}</span>
-    `;
+    const titleGroup = document.createElement("div");
+    const title = document.createElement("h3");
+    title.className = CLASSES.runTitle;
+    title.textContent = text(run.run_label, run.run_id);
+    titleGroup.appendChild(title);
+
+    const subtitle = document.createElement("p");
+    subtitle.className = CLASSES.runSubtitle;
+    subtitle.textContent = `${text(run.policy_name)} | ${text(run.run_id)}`;
+    titleGroup.appendChild(subtitle);
+    head.appendChild(titleGroup);
+
+    const pillGroup = document.createElement("div");
+    pillGroup.className = "run-pill-group flex flex-wrap justify-end gap-2 max-[720px]:justify-start";
+    const status = document.createElement("span");
+    status.className = statusPillClass(run.overall_status);
+    status.textContent = text(run.overall_status, "unknown");
+    pillGroup.appendChild(status);
+    if (run.run_id === state.bestRunId) {
+      pillGroup.appendChild(createBestPill());
+    }
+    head.appendChild(pillGroup);
     card.appendChild(head);
 
     const metrics = document.createElement("div");
@@ -977,7 +1233,7 @@ function renderHistory() {
 
     const compareButton = document.createElement("button");
     compareButton.type = "button";
-    compareButton.className = cardButtonClass({ primary: true, selected: state.selectedRunIds[0] === run.run_id });
+    compareButton.className = cardButtonClass({ variant: "primary", selected: state.selectedRunIds[0] === run.run_id });
     compareButton.textContent = state.selectedRunIds[0] === run.run_id ? "Viewing" : "View Details";
     compareButton.addEventListener("click", () => focusRun(run.run_id));
     actions.appendChild(compareButton);
@@ -985,7 +1241,7 @@ function renderHistory() {
     if (state.selectedRunIds[0] !== run.run_id) {
       const comparisonButton = document.createElement("button");
       comparisonButton.type = "button";
-      comparisonButton.className = cardButtonClass({ selected: state.selectedRunIds.includes(run.run_id) });
+      comparisonButton.className = cardButtonClass({ variant: "compare", selected: state.selectedRunIds.includes(run.run_id) });
       comparisonButton.textContent = state.selectedRunIds.includes(run.run_id) ? "Remove Compare" : "Compare";
       comparisonButton.addEventListener("click", () => toggleComparisonRun(run.run_id));
       actions.appendChild(comparisonButton);
@@ -994,13 +1250,34 @@ function renderHistory() {
     if (run.run_id !== state.bestRunId && state.bestRunId) {
       const bestButton = document.createElement("button");
       bestButton.type = "button";
-      bestButton.className = cardButtonClass();
+      bestButton.className = cardButtonClass({ variant: "compare" });
       bestButton.textContent = "With Best";
       bestButton.addEventListener("click", () => compareWithBest(run.run_id));
       actions.appendChild(bestButton);
     }
 
     card.appendChild(actions);
+
+    if (runHasTimelineData(run)) {
+      const previewing = state.previewRunIds.includes(run.run_id);
+      const previewButton = document.createElement("button");
+      previewButton.type = "button";
+      previewButton.className = cardButtonClass({ variant: "neutral", selected: previewing });
+      previewButton.textContent = previewing ? "Hide Preview" : "Preview";
+      previewButton.addEventListener("click", () => togglePreviewRun(run.run_id));
+      actions.appendChild(previewButton);
+
+      if (previewing) {
+        const preview = document.createElement("div");
+        preview.className = "history-preview";
+        preview.appendChild(createTimelineCard(run, run.timeline.max_end_s, {
+          includeDetails: false,
+          scrollKey: `preview:${run.run_id}`,
+        }));
+        card.appendChild(preview);
+      }
+    }
+
     historyGrid.appendChild(card);
   });
 }
@@ -1012,8 +1289,8 @@ async function refreshAll(options = {}) {
       refreshButton.disabled = true;
       refreshButton.textContent = "Refreshing...";
     }
-    await loadExperiments();
-    await loadRuns();
+    await loadExperiments({ silent });
+    await loadRuns({ silent });
   } catch (error) {
     bestRunCard.className = CLASSES.emptyState;
     bestRunCard.textContent = error.message;
@@ -1036,7 +1313,9 @@ async function refreshAll(options = {}) {
 experimentSelect.addEventListener("change", async (event) => {
   state.experimentId = event.target.value;
   state.selectedRunIds = [];
+  state.previewRunIds = [];
   state.hasPrimedSelection = false;
+  state.runsPayloadSignature = "";
   await loadRuns();
 });
 
@@ -1056,7 +1335,7 @@ refreshButton.addEventListener("click", refreshAll);
 
 clearSelectionButton.addEventListener("click", () => {
   state.selectedRunIds = [];
-  render();
+  render({ scrollToDetail: true });
 });
 
 refreshAll();

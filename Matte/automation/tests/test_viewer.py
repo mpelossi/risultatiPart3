@@ -173,6 +173,59 @@ class ViewerDataTests(unittest.TestCase):
             self.assertEqual(run["jobs"]["streamcluster"]["planned_cores"], JOB_CATALOG["streamcluster"].default_cores)
             self.assertEqual(run["jobs"]["streamcluster"]["planned_threads"], JOB_CATALOG["streamcluster"].default_threads)
 
+    def test_load_run_view_exposes_node_platform_metadata(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            experiment_root = root / "runs" / "demo"
+            durations = {
+                "barnes": 60,
+                "blackscholes": 50,
+                "canneal": 100,
+                "freqmine": 180,
+                "radix": 25,
+                "streamcluster": 170,
+                "vips": 30,
+            }
+            run_dir = _write_run(
+                experiment_root,
+                "2026-04-23-16h42m02s",
+                policy_name="summary-backed",
+                durations_by_job=durations,
+                snapshot_filename="results.json",
+                mcperf_values=[430.0, 470.0],
+                write_summary_file=True,
+            )
+            node_platforms = {
+                "capture_status": "ok",
+                "zone": "europe-west1-b",
+                "nodes": {
+                    "node-a-8core": {
+                        "capture_status": "ok",
+                        "machine_type": "e2-standard-8",
+                        "cpu_platform": "Intel Broadwell",
+                    },
+                    "node-b-4core": {
+                        "capture_status": "ok",
+                        "machine_type": "n2d-highcpu-4",
+                        "cpu_platform": "AMD Milan",
+                    },
+                },
+                "errors": [],
+            }
+            (run_dir / "node_platforms.json").write_text(
+                json.dumps(node_platforms, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+            summary["node_platforms"] = node_platforms
+            (run_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+
+            run = load_run_view(root / "runs", "demo", "2026-04-23-16h42m02s")
+
+            self.assertTrue(run["artifact_flags"]["node_platforms"])
+            self.assertEqual(run["node_platforms"], node_platforms)
+            self.assertEqual(run["node_platforms"]["nodes"]["node-b-4core"]["cpu_platform"], "AMD Milan")
+
     def test_load_run_view_reconstructs_legacy_pods_runs(self) -> None:
         with temp_workspace() as workspace:
             root = Path(workspace)

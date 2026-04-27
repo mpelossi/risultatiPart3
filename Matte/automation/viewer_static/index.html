@@ -23,9 +23,15 @@
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-3">
+        <a
+          href="/schedules.html"
+          class="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-900/15 bg-white/80 px-5 py-3 text-sm font-bold text-[var(--page-ink)] shadow-sm transition hover:-translate-y-px hover:bg-white focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]"
+        >
+          Schedule Planner
+        </a>
         <button
           id="refresh-button"
-          class="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-900/15 bg-white/75 px-5 py-3 text-sm font-bold text-[var(--page-ink)] shadow-sm transition hover:-translate-y-px hover:bg-white focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)] disabled:cursor-wait disabled:opacity-65"
+          class="inline-flex min-h-11 items-center justify-center rounded-full border border-emerald-800/80 bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-px hover:bg-emerald-800 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)] disabled:cursor-wait disabled:opacity-65"
           type="button"
         >
           Refresh Data
@@ -52,7 +58,7 @@
         <span class="text-[0.82rem] uppercase tracking-[0.08em] text-[var(--muted)]">Selected</span>
         <div class="flex min-h-[50px] items-center justify-between gap-3 rounded-xl border border-slate-900/15 bg-white/75 px-3.5 py-3">
           <strong id="selection-count">0 / 2</strong>
-          <button id="clear-selection-button" class="inline-flex items-center justify-center py-1 text-sm font-bold text-[var(--accent-deep)] transition hover:-translate-y-px focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]" type="button">Clear</button>
+          <button id="clear-selection-button" class="inline-flex items-center justify-center rounded-full border border-slate-900/15 bg-white/80 px-3 py-1.5 text-sm font-bold text-[var(--page-ink)] shadow-sm transition hover:-translate-y-px hover:bg-white focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]" type="button">Clear</button>
         </div>
       </div>
     </section>
@@ -69,7 +75,7 @@
       <div id="best-run-card" class="empty-state rounded-2xl bg-white/60 p-5 text-[var(--muted)]">Loading best run...</div>
     </section>
 
-    <section class="mb-6 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
+    <section id="run-detail-section" class="mb-6 rounded-3xl border border-[var(--panel-border)] bg-white/95 p-5 shadow-[var(--shadow)] backdrop-blur-md max-[720px]:p-3.5">
       <div class="mb-5 flex items-end justify-between gap-6 max-[720px]:flex-col max-[720px]:items-start">
         <div>
           <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">Selected Run</p>
@@ -102,6 +108,7 @@
     </article>
   </template>
 
+  <script src="/timeline.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

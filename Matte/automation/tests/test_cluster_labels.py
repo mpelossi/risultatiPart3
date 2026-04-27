@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from Matte.automation.cluster import ClusterController
+from Matte.automation.cluster import ClusterController, NodeInfo
 from Matte.automation.config import ExperimentConfig, MeasurementConfig
 from Matte.automation.utils import CommandResult
 
@@ -78,6 +78,17 @@ class RetryingClusterController(ClusterController):
         if not self.responses:
             raise AssertionError("No more fake kubectl responses configured")
         return self.responses.pop(0)
+
+
+class PlatformClusterController(ClusterController):
+    def __init__(self):
+        super().__init__(_experiment_config())
+
+    def discover_nodes(self) -> dict[str, NodeInfo]:
+        return {
+            "node-a-8core": NodeInfo("node-a-8core-abcd", "node-a-8core", "10.0.0.21", None),
+            "node-b-4core": NodeInfo("node-b-4core-wxyz", "node-b-4core", "10.0.0.22", None),
+        }
 
 
 class ClusterLabelRepairTests(unittest.TestCase):
@@ -201,6 +212,70 @@ class ClusterLabelRepairTests(unittest.TestCase):
         with patch("Matte.automation.cluster.time.sleep"):
             with self.assertRaisesRegex(RuntimeError, "Kubernetes API connectivity was lost"):
                 cluster.kubectl_json("get", "jobs", "-o", "json")
+
+    def test_capture_benchmark_node_platforms_parses_gcloud_json(self) -> None:
+        cluster = PlatformClusterController()
+
+        def fake_run_command(args, *, check=True, **_kwargs):  # type: ignore[no-untyped-def]
+            node_name = args[4]
+            payloads = {
+                "node-a-8core-abcd": {
+                    "name": "node-a-8core-abcd",
+                    "machineType": "zones/europe-west1-b/machineTypes/e2-standard-8",
+                    "cpuPlatform": "Intel Broadwell",
+                    "zone": "zones/europe-west1-b",
+                    "status": "RUNNING",
+                },
+                "node-b-4core-wxyz": {
+                    "name": "node-b-4core-wxyz",
+                    "machineType": "zones/europe-west1-b/machineTypes/n2d-highcpu-4",
+                    "cpuPlatform": "AMD Milan",
+                    "zone": "zones/europe-west1-b",
+                    "status": "RUNNING",
+                },
+            }
+            return CommandResult(args=args, returncode=0, stdout=json.dumps(payloads[node_name]), stderr="")
+
+        with patch("Matte.automation.cluster.run_command", side_effect=fake_run_command):
+            payload = cluster.capture_benchmark_node_platforms()
+
+        self.assertEqual(payload["capture_status"], "ok")
+        nodes = payload["nodes"]
+        self.assertEqual(nodes["node-a-8core"]["machine_type"], "e2-standard-8")
+        self.assertEqual(nodes["node-a-8core"]["cpu_platform"], "Intel Broadwell")
+        self.assertEqual(nodes["node-b-4core"]["machine_type"], "n2d-highcpu-4")
+        self.assertEqual(nodes["node-b-4core"]["cpu_platform"], "AMD Milan")
+
+    def test_capture_benchmark_node_platforms_records_gcloud_errors(self) -> None:
+        cluster = PlatformClusterController()
+
+        def fake_run_command(args, *, check=True, **_kwargs):  # type: ignore[no-untyped-def]
+            node_name = args[4]
+            if node_name == "node-b-4core-wxyz":
+                return CommandResult(args=args, returncode=1, stdout="", stderr="permission denied")
+            return CommandResult(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "name": node_name,
+                        "machineType": "zones/europe-west1-b/machineTypes/e2-standard-8",
+                        "cpuPlatform": "Intel Broadwell",
+                        "zone": "zones/europe-west1-b",
+                        "status": "RUNNING",
+                    }
+                ),
+                stderr="",
+            )
+
+        with patch("Matte.automation.cluster.run_command", side_effect=fake_run_command):
+            payload = cluster.capture_benchmark_node_platforms()
+
+        self.assertEqual(payload["capture_status"], "partial")
+        nodes = payload["nodes"]
+        self.assertEqual(nodes["node-a-8core"]["capture_status"], "ok")
+        self.assertEqual(nodes["node-b-4core"]["capture_status"], "error")
+        self.assertIn("permission denied", nodes["node-b-4core"]["error"])
 
 
 if __name__ == "__main__":

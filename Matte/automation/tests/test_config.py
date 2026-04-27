@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from Matte.automation.config import load_experiment_config, load_policy_config
+from Matte.automation.config import load_experiment_config, load_policy_config, load_run_queue_config
 from Matte.automation.manifests import resolve_jobs
 from Matte.automation.tests.helpers import temp_workspace, write_json_config
 
@@ -29,6 +29,54 @@ class ConfigTests(unittest.TestCase):
             config = load_experiment_config(str(config_path))
             self.assertEqual(config.experiment_id, "demo")
             self.assertEqual(config.results_root, (root / "runs").resolve())
+
+    def test_queue_config_resolves_relative_policy_paths(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            schedules_dir = root / "schedules"
+            schedules_dir.mkdir()
+            first_policy = schedules_dir / "schedule1.yaml"
+            second_policy = schedules_dir / "schedule2.yaml"
+            write_json_config(first_policy, {"policy_name": "candidate-1"})
+            write_json_config(second_policy, {"policy_name": "candidate-2"})
+            queue_path = root / "schedule_queue.yaml"
+            write_json_config(
+                queue_path,
+                {
+                    "queue_name": "candidates",
+                    "entries": [
+                        {"policy": "schedules/schedule1.yaml"},
+                        {"policy": "schedules/schedule2.yaml", "runs": 3},
+                    ],
+                },
+            )
+
+            queue = load_run_queue_config(str(queue_path))
+
+            self.assertEqual(queue.queue_name, "candidates")
+            self.assertEqual(queue.entries[0].policy_path, first_policy.resolve())
+            self.assertEqual(queue.entries[0].runs, 1)
+            self.assertEqual(queue.entries[1].policy_path, second_policy.resolve())
+            self.assertEqual(queue.entries[1].runs, 3)
+
+    def test_queue_config_rejects_invalid_entries(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            policy_path = root / "schedule.yaml"
+            write_json_config(policy_path, {"policy_name": "candidate"})
+            queue_path = root / "schedule_queue.yaml"
+
+            write_json_config(queue_path, {"queue_name": "empty", "entries": []})
+            with self.assertRaisesRegex(ValueError, "entries must contain"):
+                load_run_queue_config(str(queue_path))
+
+            write_json_config(queue_path, {"entries": [{"policy": "schedule.yaml", "runs": 0}]})
+            with self.assertRaisesRegex(ValueError, "runs must be at least 1"):
+                load_run_queue_config(str(queue_path))
+
+            write_json_config(queue_path, {"entries": [{"policy": "missing.yaml"}]})
+            with self.assertRaises(FileNotFoundError):
+                load_run_queue_config(str(queue_path))
 
     def test_policy_rejects_invalid_phase_dependency(self) -> None:
         with temp_workspace() as workspace:
