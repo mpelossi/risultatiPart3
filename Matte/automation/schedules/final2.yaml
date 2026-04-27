@@ -1,0 +1,42 @@
+policy_name: "split-brain-var6"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "barnes"
+    
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  vips:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "vips"
