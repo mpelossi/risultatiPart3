@@ -1,0 +1,75 @@
+[
+  {
+    "id": "phase-01",
+    "after": "start",
+    "jobs_complete": [],
+    "delay_s": 0,
+    "launch": [
+      "parsec-canneal-2026-04-27-04h29m41s"
+    ]
+  },
+  {
+    "id": "phase-02",
+    "after": "jobs_complete",
+    "jobs_complete": [
+      "canneal"
+    ],
+    "delay_s": 0,
+    "launch": [
+      "parsec-blackscholes-2026-04-27-04h29m41s"
+    ]
+  },
+  {
+    "id": "phase-03",
+    "after": "jobs_complete",
+    "jobs_complete": [
+      "blackscholes"
+    ],
+    "delay_s": 0,
+    "launch": [
+      "parsec-barnes-2026-04-27-04h29m41s"
+    ]
+  },
+  {
+    "id": "phase-04",
+    "after": "jobs_complete",
+    "jobs_complete": [
+      "barnes"
+    ],
+    "delay_s": 0,
+    "launch": [
+      "parsec-vips-2026-04-27-04h29m41s"
+    ]
+  },
+  {
+    "id": "phase-05",
+    "after": "jobs_complete",
+    "jobs_complete": [
+      "vips"
+    ],
+    "delay_s": 0,
+    "launch": [
+      "parsec-radix-2026-04-27-04h29m41s"
+    ]
+  },
+  {
+    "id": "phase-06",
+    "after": "start",
+    "jobs_complete": [],
+    "delay_s": 0,
+    "launch": [
+      "parsec-streamcluster-2026-04-27-04h29m41s"
+    ]
+  },
+  {
+    "id": "phase-07",
+    "after": "jobs_complete",
+    "jobs_complete": [
+      "streamcluster"
+    ],
+    "delay_s": 0,
+    "launch": [
+      "parsec-freqmine-2026-04-27-04h29m41s"
+    ]
+  }
+]

@@ -1,0 +1,31 @@
+{
+  "capture_status": "ok",
+  "errors": [],
+  "nodes": {
+    "node-a-8core": {
+      "capture_status": "ok",
+      "cpu_platform": "AMD Rome",
+      "gcp_name": "node-a-8core-9mxf",
+      "gcp_status": "RUNNING",
+      "machine_type": "e2-standard-8",
+      "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/e2-standard-8",
+      "node_name": "node-a-8core-9mxf",
+      "node_type": "node-a-8core",
+      "zone": "europe-west1-b",
+      "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+    },
+    "node-b-4core": {
+      "capture_status": "ok",
+      "cpu_platform": "AMD Milan",
+      "gcp_name": "node-b-4core-mf33",
+      "gcp_status": "RUNNING",
+      "machine_type": "n2d-highcpu-4",
+      "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/n2d-highcpu-4",
+      "node_name": "node-b-4core-mf33",
+      "node_type": "node-b-4core",
+      "zone": "europe-west1-b",
+      "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+    }
+  },
+  "zone": "europe-west1-b"
+}

@@ -1,0 +1,46 @@
+policy_name: "memA-dual-pipe-NodeB"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE A (7 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+  radix:
+    node: "node-a-8core"
+    cores: "1-4"
+    threads: 4
+    after: "freqmine"
+
+  # --- NODE B PIPELINE 1 (Cores 0-1) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "start"
+
+  # --- NODE B PIPELINE 2 (Cores 2-3) ---
+  barnes:
+    node: "node-b-4core"
+    cores: "2-3"
+    threads: 2
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "2-3"
+    threads: 2
+    after: "barnes"
+  vips:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "canneal"

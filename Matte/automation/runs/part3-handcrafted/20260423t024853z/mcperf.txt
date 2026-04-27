@@ -1,0 +1,6 @@
+#type       avg     std     min      p5     p10     p50     p67     p75     p80     p85     p90     p95     p99    p999   p9999      QPS   target       ts_start         ts_end
+mcperf.cc(757): sync_agent[M]: out of sync [1] for agent 1 expected sync got 
+mcperf.cc(757): sync_agent[M]: out of sync [1] for agent 2 expected sync got 
+mcperf.cc(780): sync_agent[M]: out of sync [2] for agent 1 expected ack got 
+mcperf.cc(780): sync_agent[M]: out of sync [2] for agent 2 expected ack got 
+mcperf.cc(1619): ERROR during synchronization! mcperf.cc:1619

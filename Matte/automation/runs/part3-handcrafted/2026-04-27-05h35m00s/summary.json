@@ -1,0 +1,123 @@
+{
+  "completed_job_count": 7,
+  "expected_job_count": 7,
+  "experiment_id": "part3-handcrafted",
+  "jobs": {
+    "barnes": {
+      "finished_at": "2026-04-27T03:37:42Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.86",
+      "pod_name": "parsec-barnes-2026-04-27-05h35m00s-krktn",
+      "runtime_s": 78.0,
+      "started_at": "2026-04-27T03:36:24Z",
+      "status": "completed"
+    },
+    "blackscholes": {
+      "finished_at": "2026-04-27T03:37:55Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.87",
+      "pod_name": "parsec-blackscholes-2026-04-27-05h35m00s-52p4r",
+      "runtime_s": 91.0,
+      "started_at": "2026-04-27T03:36:24Z",
+      "status": "completed"
+    },
+    "canneal": {
+      "finished_at": "2026-04-27T03:39:40Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.88",
+      "pod_name": "parsec-canneal-2026-04-27-05h35m00s-2xn6f",
+      "runtime_s": 72.0,
+      "started_at": "2026-04-27T03:38:28Z",
+      "status": "completed"
+    },
+    "freqmine": {
+      "finished_at": "2026-04-27T03:40:11Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.85",
+      "pod_name": "parsec-freqmine-2026-04-27-05h35m00s-f2pst",
+      "runtime_s": 88.0,
+      "started_at": "2026-04-27T03:38:43Z",
+      "status": "completed"
+    },
+    "radix": {
+      "finished_at": "2026-04-27T03:40:28Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.86",
+      "pod_name": "parsec-radix-2026-04-27-05h35m00s-t4tpm",
+      "runtime_s": 12.0,
+      "started_at": "2026-04-27T03:40:16Z",
+      "status": "completed"
+    },
+    "streamcluster": {
+      "finished_at": "2026-04-27T03:38:37Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.84",
+      "pod_name": "parsec-streamcluster-2026-04-27-05h35m00s-7dxjl",
+      "runtime_s": 135.0,
+      "started_at": "2026-04-27T03:36:22Z",
+      "status": "completed"
+    },
+    "vips": {
+      "finished_at": "2026-04-27T03:38:20Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.85",
+      "pod_name": "parsec-vips-2026-04-27-05h35m00s-6k6hz",
+      "runtime_s": 117.0,
+      "started_at": "2026-04-27T03:36:23Z",
+      "status": "completed"
+    }
+  },
+  "makespan_s": 246.0,
+  "max_observed_p95_us": 740.1,
+  "measurement_status": "ok",
+  "memcached": {
+    "node_name": "node-a-8core-9mxf",
+    "phase": "Running",
+    "pod_ip": "100.96.5.83",
+    "pod_name": "memcached-server-2026-04-27-05h35m00s"
+  },
+  "node_platforms": {
+    "capture_status": "ok",
+    "errors": [],
+    "nodes": {
+      "node-a-8core": {
+        "capture_status": "ok",
+        "cpu_platform": "AMD Rome",
+        "gcp_name": "node-a-8core-9mxf",
+        "gcp_status": "RUNNING",
+        "machine_type": "e2-standard-8",
+        "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/e2-standard-8",
+        "node_name": "node-a-8core-9mxf",
+        "node_type": "node-a-8core",
+        "zone": "europe-west1-b",
+        "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+      },
+      "node-b-4core": {
+        "capture_status": "ok",
+        "cpu_platform": "AMD Milan",
+        "gcp_name": "node-b-4core-mf33",
+        "gcp_status": "RUNNING",
+        "machine_type": "n2d-highcpu-4",
+        "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/n2d-highcpu-4",
+        "node_name": "node-b-4core-mf33",
+        "node_type": "node-b-4core",
+        "zone": "europe-west1-b",
+        "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+      }
+    },
+    "zone": "europe-west1-b"
+  },
+  "overall_status": "pass",
+  "policy_name": "memA-3way-NodeB",
+  "run_id": "2026-04-27-05h35m00s",
+  "sample_count": 23,
+  "slo_violations": 0,
+  "timing_complete": true
+}

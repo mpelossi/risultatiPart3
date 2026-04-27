@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: precache-node-b-4core-2026-04-27-04h17m41s
+  labels:
+    cca-project-managed: "true"
+    cca-project-experiment: "part3-handcrafted"
+    cca-project-role: "precache"
+    cca-project-precache-run: "2026-04-27-04h17m41s"
+spec:
+  restartPolicy: Never
+  containers:
+  - image: anakli/cca:parsec_blackscholes
+    name: image-01
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+  - image: anakli/cca:parsec_canneal
+    name: image-02
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+  - image: anakli/cca:parsec_freqmine
+    name: image-03
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+  - image: anakli/cca:parsec_streamcluster
+    name: image-04
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+  - image: anakli/cca:parsec_vips
+    name: image-05
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+  - image: anakli/cca:splash2x_barnes
+    name: image-06
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+  - image: anakli/cca:splash2x_radix
+    name: image-07
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+  - image: anakli/memcached:t1
+    name: image-08
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+  nodeSelector:
+    cca-project-nodetype: "node-b-4core"

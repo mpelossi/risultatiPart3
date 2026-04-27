@@ -1,0 +1,92 @@
+{
+  "completed_job_count": 7,
+  "expected_job_count": 7,
+  "experiment_id": "part3-handcrafted",
+  "jobs": {
+    "barnes": {
+      "finished_at": "2026-04-26T22:03:00Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.8",
+      "pod_name": "parsec-barnes-2026-04-26-23h57m26s-w79c2",
+      "runtime_s": 63.0,
+      "started_at": "2026-04-26T22:01:57Z",
+      "status": "completed"
+    },
+    "blackscholes": {
+      "finished_at": "2026-04-26T21:59:41Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.6",
+      "pod_name": "parsec-blackscholes-2026-04-26-23h57m26s-s6l57",
+      "runtime_s": 53.0,
+      "started_at": "2026-04-26T21:58:48Z",
+      "status": "completed"
+    },
+    "canneal": {
+      "finished_at": "2026-04-26T22:01:52Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.7",
+      "pod_name": "parsec-canneal-2026-04-26-23h57m26s-d2kqd",
+      "runtime_s": 123.0,
+      "started_at": "2026-04-26T21:59:49Z",
+      "status": "completed"
+    },
+    "freqmine": {
+      "finished_at": "2026-04-26T22:01:47Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.5",
+      "pod_name": "parsec-freqmine-2026-04-26-23h57m26s-7wtxv",
+      "runtime_s": 66.0,
+      "started_at": "2026-04-26T22:00:41Z",
+      "status": "completed"
+    },
+    "radix": {
+      "finished_at": "2026-04-26T22:02:13Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.7",
+      "pod_name": "parsec-radix-2026-04-26-23h57m26s-w5cvp",
+      "runtime_s": 20.0,
+      "started_at": "2026-04-26T22:01:53Z",
+      "status": "completed"
+    },
+    "streamcluster": {
+      "finished_at": "2026-04-26T22:00:24Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.4",
+      "pod_name": "parsec-streamcluster-2026-04-26-23h57m26s-v22hh",
+      "runtime_s": 96.0,
+      "started_at": "2026-04-26T21:58:48Z",
+      "status": "completed"
+    },
+    "vips": {
+      "finished_at": "2026-04-26T22:02:13Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.6",
+      "pod_name": "parsec-vips-2026-04-26-23h57m26s-89xwj",
+      "runtime_s": 20.0,
+      "started_at": "2026-04-26T22:01:53Z",
+      "status": "completed"
+    }
+  },
+  "makespan_s": 252.0,
+  "max_observed_p95_us": 439.6,
+  "measurement_status": "ok",
+  "memcached": {
+    "node_name": "node-b-4core-mf33",
+    "phase": "Running",
+    "pod_ip": "100.96.6.5",
+    "pod_name": "memcached-server-2026-04-26-23h57m26s"
+  },
+  "overall_status": "pass",
+  "policy_name": "ultimate-6-2-split",
+  "run_id": "2026-04-26-23h57m26s",
+  "sample_count": 24,
+  "slo_violations": 0,
+  "timing_complete": true
+}

@@ -1,0 +1,47 @@
+policy_name: "memA-max-parallel"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE B PIPELINE (4 Cores, super fast) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "canneal"
+  barnes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "blackscholes"
+
+    # Concurrent block on Node A
+  vips:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "barnes"
+  radix:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "vips"
+
+  # --- NODE A PIPELINE (7 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+

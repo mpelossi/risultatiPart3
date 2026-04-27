@@ -1,0 +1,54 @@
+policy_name: "memA-the-grid-fragmentation"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE A ---
+  radix:
+    node: "node-a-8core"
+    cores: "7"
+    threads: 1
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-6"
+    threads: 6
+    after: "start"
+
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "freqmine"
+
+  # --- NODE B ---
+  # Pipe 1 (Cores 0-1)
+  canneal:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "start"
+    
+  # Pipe 2 (Core 2)
+  barnes:
+    node: "node-b-4core"
+    cores: "2"
+    threads: 1
+    after: "start"
+
+    
+  # Pipe 3 (Core 3)
+  vips:
+    node: "node-b-4core"
+    cores: "3"
+    threads: 1
+    after: "start"
+
+
+        #BARNES FINISHES AFTER VIPS BUT BEFORE CANNEAL
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "barnes"

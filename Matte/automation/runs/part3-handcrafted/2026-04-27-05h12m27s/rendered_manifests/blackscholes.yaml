@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: parsec-blackscholes-2026-04-27-05h12m27s
+  labels:
+    cca-project-managed: "true"
+    cca-project-experiment: "part3-handcrafted"
+    cca-project-run-id: "2026-04-27-05h12m27s"
+    cca-project-job-id: "blackscholes"
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        cca-project-managed: "true"
+        cca-project-experiment: "part3-handcrafted"
+        cca-project-run-id: "2026-04-27-05h12m27s"
+        cca-project-job-id: "blackscholes"
+    spec:
+      containers:
+      - image: anakli/cca:parsec_blackscholes
+        name: parsec-blackscholes
+        imagePullPolicy: Always
+        command: ["/bin/sh"]
+        args: ["-c", "taskset -c 0-3 ./run -a run -S parsec -p blackscholes -i native -n 4"]
+      restartPolicy: Never
+      nodeSelector:
+        cca-project-nodetype: "node-b-4core"

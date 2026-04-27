@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: parsec-radix-2026-04-27-07h25m44s
+  labels:
+    cca-project-managed: "true"
+    cca-project-experiment: "part3-handcrafted"
+    cca-project-run-id: "2026-04-27-07h25m44s"
+    cca-project-job-id: "radix"
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        cca-project-managed: "true"
+        cca-project-experiment: "part3-handcrafted"
+        cca-project-run-id: "2026-04-27-07h25m44s"
+        cca-project-job-id: "radix"
+    spec:
+      containers:
+      - image: anakli/cca:splash2x_radix
+        name: parsec-radix
+        imagePullPolicy: Always
+        command: ["/bin/sh"]
+        args: ["-c", "taskset -c 0-7 ./run -a run -S splash2x -p radix -i native -n 8"]
+      restartPolicy: Never
+      nodeSelector:
+        cca-project-nodetype: "node-a-8core"

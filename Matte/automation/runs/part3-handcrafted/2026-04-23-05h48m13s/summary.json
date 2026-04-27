@@ -1,0 +1,92 @@
+{
+  "completed_job_count": 7,
+  "expected_job_count": 7,
+  "experiment_id": "part3-handcrafted",
+  "jobs": {
+    "barnes": {
+      "finished_at": "2026-04-23T03:53:05Z",
+      "node_name": "node-a-8core-cdf0",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.24",
+      "pod_name": "parsec-barnes-2026-04-23-05h48m13s-fv5p7",
+      "runtime_s": 36.0,
+      "started_at": "2026-04-23T03:52:29Z",
+      "status": "completed"
+    },
+    "blackscholes": {
+      "finished_at": "2026-04-23T03:49:53Z",
+      "node_name": "node-b-4core-stg6",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.20",
+      "pod_name": "parsec-blackscholes-2026-04-23-05h48m13s-74nz9",
+      "runtime_s": 45.0,
+      "started_at": "2026-04-23T03:49:08Z",
+      "status": "completed"
+    },
+    "canneal": {
+      "finished_at": "2026-04-23T03:51:54Z",
+      "node_name": "node-b-4core-stg6",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.21",
+      "pod_name": "parsec-canneal-2026-04-23-05h48m13s-m45lt",
+      "runtime_s": 115.0,
+      "started_at": "2026-04-23T03:49:59Z",
+      "status": "completed"
+    },
+    "freqmine": {
+      "finished_at": "2026-04-23T03:52:24Z",
+      "node_name": "node-a-8core-cdf0",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.23",
+      "pod_name": "parsec-freqmine-2026-04-23-05h48m13s-nmmfs",
+      "runtime_s": 70.0,
+      "started_at": "2026-04-23T03:51:14Z",
+      "status": "completed"
+    },
+    "radix": {
+      "finished_at": "2026-04-23T03:52:42Z",
+      "node_name": "node-a-8core-cdf0",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.25",
+      "pod_name": "parsec-radix-2026-04-23-05h48m13s-r4n69",
+      "runtime_s": 13.0,
+      "started_at": "2026-04-23T03:52:29Z",
+      "status": "completed"
+    },
+    "streamcluster": {
+      "finished_at": "2026-04-23T03:51:09Z",
+      "node_name": "node-a-8core-cdf0",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.22",
+      "pod_name": "parsec-streamcluster-2026-04-23-05h48m13s-cvq4d",
+      "runtime_s": 121.0,
+      "started_at": "2026-04-23T03:49:08Z",
+      "status": "completed"
+    },
+    "vips": {
+      "finished_at": "2026-04-23T03:53:08Z",
+      "node_name": "node-b-4core-stg6",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.22",
+      "pod_name": "parsec-vips-2026-04-23-05h48m13s-8lkph",
+      "runtime_s": 69.0,
+      "started_at": "2026-04-23T03:51:59Z",
+      "status": "completed"
+    }
+  },
+  "makespan_s": 240.0,
+  "max_observed_p95_us": 467.9,
+  "measurement_status": "ok",
+  "memcached": {
+    "node_name": "node-b-4core-stg6",
+    "phase": "Running",
+    "pod_ip": "100.96.4.19",
+    "pod_name": "memcached-server-2026-04-23-05h48m13s"
+  },
+  "overall_status": "pass",
+  "policy_name": "parallel-tail-simple",
+  "run_id": "2026-04-23-05h48m13s",
+  "sample_count": 22,
+  "slo_violations": 0,
+  "timing_complete": true
+}

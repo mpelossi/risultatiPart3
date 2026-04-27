@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: parsec-streamcluster-2026-04-27-05h18m19s
+  labels:
+    cca-project-managed: "true"
+    cca-project-experiment: "part3-handcrafted"
+    cca-project-run-id: "2026-04-27-05h18m19s"
+    cca-project-job-id: "streamcluster"
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        cca-project-managed: "true"
+        cca-project-experiment: "part3-handcrafted"
+        cca-project-run-id: "2026-04-27-05h18m19s"
+        cca-project-job-id: "streamcluster"
+    spec:
+      containers:
+      - image: anakli/cca:parsec_streamcluster
+        name: parsec-streamcluster
+        imagePullPolicy: Always
+        command: ["/bin/sh"]
+        args: ["-c", "taskset -c 1-7 ./run -a run -S parsec -p streamcluster -i native -n 7"]
+      restartPolicy: Never
+      nodeSelector:
+        cca-project-nodetype: "node-a-8core"

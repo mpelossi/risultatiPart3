@@ -1,0 +1,123 @@
+{
+  "completed_job_count": 7,
+  "expected_job_count": 7,
+  "experiment_id": "part3-handcrafted",
+  "jobs": {
+    "barnes": {
+      "finished_at": "2026-04-27T00:40:00Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.48",
+      "pod_name": "parsec-barnes-2026-04-27-02h34m49s-fvbp2",
+      "runtime_s": 63.0,
+      "started_at": "2026-04-27T00:38:57Z",
+      "status": "completed"
+    },
+    "blackscholes": {
+      "finished_at": "2026-04-27T00:37:02Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.46",
+      "pod_name": "parsec-blackscholes-2026-04-27-02h34m49s-dfxz7",
+      "runtime_s": 51.0,
+      "started_at": "2026-04-27T00:36:11Z",
+      "status": "completed"
+    },
+    "canneal": {
+      "finished_at": "2026-04-27T00:38:52Z",
+      "node_name": "node-b-4core-mf33",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.47",
+      "pod_name": "parsec-canneal-2026-04-27-02h34m49s-g66s5",
+      "runtime_s": 104.0,
+      "started_at": "2026-04-27T00:37:08Z",
+      "status": "completed"
+    },
+    "freqmine": {
+      "finished_at": "2026-04-27T00:39:15Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.46",
+      "pod_name": "parsec-freqmine-2026-04-27-02h34m49s-8hvkt",
+      "runtime_s": 67.0,
+      "started_at": "2026-04-27T00:38:08Z",
+      "status": "completed"
+    },
+    "radix": {
+      "finished_at": "2026-04-27T00:39:44Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.48",
+      "pod_name": "parsec-radix-2026-04-27-02h34m49s-57sbs",
+      "runtime_s": 23.0,
+      "started_at": "2026-04-27T00:39:21Z",
+      "status": "completed"
+    },
+    "streamcluster": {
+      "finished_at": "2026-04-27T00:38:03Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.45",
+      "pod_name": "parsec-streamcluster-2026-04-27-02h34m49s-6rgvj",
+      "runtime_s": 112.0,
+      "started_at": "2026-04-27T00:36:11Z",
+      "status": "completed"
+    },
+    "vips": {
+      "finished_at": "2026-04-27T00:39:42Z",
+      "node_name": "node-a-8core-9mxf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.47",
+      "pod_name": "parsec-vips-2026-04-27-02h34m49s-2gqmn",
+      "runtime_s": 21.0,
+      "started_at": "2026-04-27T00:39:21Z",
+      "status": "completed"
+    }
+  },
+  "makespan_s": 229.0,
+  "max_observed_p95_us": 431.9,
+  "measurement_status": "ok",
+  "memcached": {
+    "node_name": "node-b-4core-mf33",
+    "phase": "Running",
+    "pod_ip": "100.96.6.45",
+    "pod_name": "memcached-server-2026-04-27-02h34m49s"
+  },
+  "node_platforms": {
+    "capture_status": "ok",
+    "errors": [],
+    "nodes": {
+      "node-a-8core": {
+        "capture_status": "ok",
+        "cpu_platform": "AMD Rome",
+        "gcp_name": "node-a-8core-9mxf",
+        "gcp_status": "RUNNING",
+        "machine_type": "e2-standard-8",
+        "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/e2-standard-8",
+        "node_name": "node-a-8core-9mxf",
+        "node_type": "node-a-8core",
+        "zone": "europe-west1-b",
+        "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+      },
+      "node-b-4core": {
+        "capture_status": "ok",
+        "cpu_platform": "AMD Milan",
+        "gcp_name": "node-b-4core-mf33",
+        "gcp_status": "RUNNING",
+        "machine_type": "n2d-highcpu-4",
+        "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/n2d-highcpu-4",
+        "node_name": "node-b-4core-mf33",
+        "node_type": "node-b-4core",
+        "zone": "europe-west1-b",
+        "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+      }
+    },
+    "zone": "europe-west1-b"
+  },
+  "overall_status": "pass",
+  "policy_name": "6vips-2radix-1-barnesOnB",
+  "run_id": "2026-04-27-02h34m49s",
+  "sample_count": 22,
+  "slo_violations": 0,
+  "timing_complete": true
+}

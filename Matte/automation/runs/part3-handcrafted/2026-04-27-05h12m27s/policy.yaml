@@ -1,0 +1,44 @@
+policy_name: "memA-max-parallel-bis"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE B PIPELINE (4 Cores) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "canneal"
+  barnes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "blackscholes"
+  vips:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "barnes"
+
+  # --- NODE A PIPELINE (7 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+  radix:
+    node: "node-a-8core"
+    cores: "1-4"
+    threads: 4 # Power of 2, safe on Node A
+    after: "freqmine"

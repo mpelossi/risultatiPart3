@@ -1,0 +1,41 @@
+policy_name: "memcache-on-A-optimized"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  canneal:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "blackscholes"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+  barnes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "canneal"
+  vips:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "barnes"
+  radix:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "freqmine"
