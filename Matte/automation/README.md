@@ -100,6 +100,31 @@ but usually optional because the images should already be present. For `run batc
 python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache
 ```
 
+### 7b. Run multiple schedules as a queue
+
+Create a queue file such as:
+
+```yaml
+queue_name: "part3-candidates"
+entries:
+  - policy: "schedules/schedule1.yaml"
+    runs: 1
+  - policy: "schedules/schedule2.yaml"
+    runs: 3
+  - policy: "schedules/schedule3.yaml"
+    runs: 1
+```
+
+Then run:
+
+```bash
+python3 cli.py run queue --config experiment.yaml --queue schedule_queue.yaml --precache
+```
+
+Each `policy` path is resolved relative to the queue file. `runs: 1` behaves like
+`run once`; larger values behave like `run batch`. With `--precache`, images are warmed
+only before the first real queued run.
+
 ### 8. See the best run
 
 ```bash
@@ -326,6 +351,10 @@ deletes the transient warmup pods before memcached and the benchmark jobs start.
 workflow. `summary.json` is a derived convenience report built from `results.json` and
 `mcperf.txt`.
 
+Every real run also writes `node_platforms.json` and copies that data into `summary.json`.
+This records the GCP `cpuPlatform` and machine type for the benchmark nodes
+`node-a-8core` and `node-b-4core`, so n2d Rome/Milan placement is visible after the run.
+
 If you already warmed the images on this cluster, you may omit `--precache` on later
 single runs. Re-running it is not harmful; it just creates short-lived image-warmup pods
 and deletes them before memcached starts.
@@ -415,6 +444,10 @@ Runs one full live experiment. `--precache` is recommended.
 ### `python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache`
 
 Runs the same experiment multiple times.
+
+### `python3 cli.py run queue --config experiment.yaml --queue schedule_queue.yaml --precache`
+
+Runs each schedule listed in a queue file, stopping on the first runner exception.
 
 ### `python3 cli.py results best --experiment part3-handcrafted`
 

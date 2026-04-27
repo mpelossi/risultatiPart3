@@ -27,6 +27,7 @@ CANONICAL_NODETYPES = (
     "node-a-8core",
     "node-b-4core",
 )
+BENCHMARK_NODETYPES = ("node-a-8core", "node-b-4core")
 
 
 class ClusterController:
@@ -306,6 +307,101 @@ class ClusterController:
         port: int = 1,
     ) -> str:
         return shlex.join(self.serial_port_output_args(node_name, port=port))
+
+    def instance_describe_args(self, node_name: str) -> list[str]:
+        return [
+            "gcloud",
+            "compute",
+            "instances",
+            "describe",
+            node_name,
+            "--zone",
+            self.config.zone,
+            "--format=json(name,machineType,cpuPlatform,zone,status)",
+        ]
+
+    def _short_resource_name(self, value: object) -> str | None:
+        if not isinstance(value, str) or not value:
+            return None
+        return value.rsplit("/", 1)[-1]
+
+    def describe_instance_json(self, node_name: str) -> dict[str, object]:
+        result = run_command(self.instance_describe_args(node_name), check=False)
+        if result.returncode != 0:
+            suffix = f": {result.combined_output}" if result.combined_output else ""
+            raise RuntimeError(f"gcloud compute instances describe failed for {node_name}{suffix}")
+        try:
+            loaded = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"gcloud returned invalid JSON for {node_name}: {exc}") from exc
+        if not isinstance(loaded, dict):
+            raise RuntimeError(f"gcloud returned a non-object payload for {node_name}")
+        return loaded
+
+    def capture_benchmark_node_platforms(
+        self,
+        *,
+        nodes: dict[str, NodeInfo] | None = None,
+    ) -> dict[str, object]:
+        discovered_nodes = self.discover_nodes() if nodes is None else nodes
+        platforms_by_node: dict[str, dict[str, object]] = {}
+        errors: list[str] = []
+        success_count = 0
+
+        for nodetype in BENCHMARK_NODETYPES:
+            node = discovered_nodes.get(nodetype)
+            node_name = node.name if node is not None else None
+            if not isinstance(node_name, str) or not node_name:
+                message = f"Missing Kubernetes node for {nodetype}"
+                platforms_by_node[nodetype] = {
+                    "capture_status": "error",
+                    "node_type": nodetype,
+                    "node_name": node_name,
+                    "error": message,
+                }
+                errors.append(message)
+                continue
+            try:
+                payload = self.describe_instance_json(node_name)
+            except Exception as exc:
+                message = str(exc)
+                platforms_by_node[nodetype] = {
+                    "capture_status": "error",
+                    "node_type": nodetype,
+                    "node_name": node_name,
+                    "error": message,
+                }
+                errors.append(f"{nodetype}: {message}")
+                continue
+
+            success_count += 1
+            machine_type_uri = payload.get("machineType")
+            zone_uri = payload.get("zone")
+            platforms_by_node[nodetype] = {
+                "capture_status": "ok",
+                "node_type": nodetype,
+                "node_name": node_name,
+                "gcp_name": payload.get("name"),
+                "machine_type": self._short_resource_name(machine_type_uri),
+                "machine_type_uri": machine_type_uri,
+                "cpu_platform": payload.get("cpuPlatform"),
+                "zone": self._short_resource_name(zone_uri) or self.config.zone,
+                "zone_uri": zone_uri,
+                "gcp_status": payload.get("status"),
+            }
+
+        if errors and success_count:
+            capture_status = "partial"
+        elif errors:
+            capture_status = "error"
+        else:
+            capture_status = "ok"
+        return {
+            "capture_status": capture_status,
+            "zone": self.config.zone,
+            "nodes": platforms_by_node,
+            "errors": errors,
+        }
 
     def ssh(
         self,

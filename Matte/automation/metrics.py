@@ -152,6 +152,7 @@ def build_summary(
     run_id: str,
     experiment_id: str,
     policy_name: str,
+    node_platforms: dict[str, object] | None = None,
 ) -> dict[str, object]:
     pod_summary = summarize_pods(pods_path, expected_jobs)
     mcperf_summary = parse_mcperf_output(mcperf_path)
@@ -166,7 +167,7 @@ def build_summary(
         overall_status = "slo_fail"
     else:
         overall_status = "pass"
-    return {
+    summary = {
         "experiment_id": experiment_id,
         "run_id": run_id,
         "policy_name": policy_name,
@@ -182,3 +183,6 @@ def build_summary(
         "measurement_status": measurement_status,
         "sample_count": len(mcperf_summary["samples"]),
     }
+    if node_platforms is not None:
+        summary["node_platforms"] = node_platforms
+    return summary

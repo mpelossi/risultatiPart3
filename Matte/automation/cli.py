@@ -15,7 +15,7 @@ from .audit import audit_schedule, load_runtime_table, load_schedule_model, rend
 from .catalog import JOB_CATALOG
 from .cluster import ClusterController
 from .collect import collect_live_pods, summarize_run
-from .config import load_experiment_config, load_policy_config
+from .config import load_experiment_config, load_policy_config, load_run_queue_config
 from .debug import format_debug_command_hint, render_debug_commands, summarize_provisioning_hints
 from .export import export_submission
 from .gui import launch_planner_gui
@@ -25,13 +25,31 @@ from .provision import (
     render_provision_expectations,
 )
 from .results import load_run_summaries, sort_best_runs
-from .runner import ExperimentRunner
+from .runner import ExperimentRunner, run_policy_queue
 from .manifests import resolve_jobs
-from .viewer import DEFAULT_RESULTS_ROOT, launch_run_viewer
+from .viewer import (
+    DEFAULT_RESULTS_ROOT,
+    DEFAULT_SCHEDULE_QUEUE_PATH,
+    DEFAULT_SCHEDULES_DIR,
+    DEFAULT_TIMES_CSV_PATH,
+    launch_run_viewer,
+)
 
 
 def _default_results_root() -> Path:
     return DEFAULT_RESULTS_ROOT
+
+
+def _default_schedules_dir() -> Path:
+    return DEFAULT_SCHEDULES_DIR
+
+
+def _default_schedule_queue_path() -> Path:
+    return DEFAULT_SCHEDULE_QUEUE_PATH
+
+
+def _default_times_csv_path() -> Path:
+    return DEFAULT_TIMES_CSV_PATH
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -70,6 +88,11 @@ def _build_parser() -> argparse.ArgumentParser:
     run_batch.add_argument("--runs", type=int, default=3)
     run_batch.add_argument("--dry-run", action="store_true")
     run_batch.add_argument("--precache", action="store_true")
+    run_queue = run_sub.add_parser("queue")
+    run_queue.add_argument("--config", required=True)
+    run_queue.add_argument("--queue", required=True)
+    run_queue.add_argument("--dry-run", action="store_true")
+    run_queue.add_argument("--precache", action="store_true")
 
     collect_parser = subparsers.add_parser("collect")
     collect_parser.add_argument("--config", required=True)
@@ -96,6 +119,9 @@ def _build_parser() -> argparse.ArgumentParser:
     results_viewer = results_sub.add_parser("viewer")
     results_viewer.add_argument("--experiment")
     results_viewer.add_argument("--results-root", default=str(_default_results_root()))
+    results_viewer.add_argument("--schedules-dir", default=str(_default_schedules_dir()))
+    results_viewer.add_argument("--schedule-queue", default=str(_default_schedule_queue_path()))
+    results_viewer.add_argument("--times-csv", default=str(_default_times_csv_path()))
     results_viewer.add_argument("--host", default="127.0.0.1")
     results_viewer.add_argument("--port", type=int, default=8000)
     results_viewer.add_argument("--no-open", action="store_true")
@@ -168,6 +194,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.dry_run and args.precache:
             parser.error("--precache cannot be combined with --dry-run")
         experiment = load_experiment_config(args.config)
+        if args.run_command == "queue":
+            queue = load_run_queue_config(args.queue)
+            run_dirs = run_policy_queue(experiment, queue, dry_run=args.dry_run, precache=args.precache)
+            for run_dir in run_dirs:
+                print(run_dir)
+            return 0
         policy = load_policy_config(args.policy)
         runner = ExperimentRunner(experiment, policy)
         if args.run_command == "once":
@@ -259,6 +291,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "results" and args.results_command == "viewer":
         return launch_run_viewer(
             results_root=Path(args.results_root).resolve(),
+            schedules_dir=Path(args.schedules_dir).resolve(),
+            schedule_queue_path=Path(args.schedule_queue).resolve() if args.schedule_queue else None,
+            times_csv_path=Path(args.times_csv).resolve(),
             experiment_id=args.experiment,
             host=args.host,
             port=args.port,

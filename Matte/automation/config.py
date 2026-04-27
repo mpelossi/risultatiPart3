@@ -125,6 +125,19 @@ class PolicyConfig:
     phases: list[Phase]
 
 
+@dataclass(frozen=True)
+class QueueEntry:
+    policy_path: Path
+    runs: int
+
+
+@dataclass(frozen=True)
+class RunQueueConfig:
+    config_path: Path
+    queue_name: str
+    entries: tuple[QueueEntry, ...]
+
+
 def load_experiment_config(path_str: str) -> ExperimentConfig:
     path = expand_path(path_str)
     raw = _load_structured_file(path)
@@ -363,4 +376,33 @@ def load_policy_config(path_str: str) -> PolicyConfig:
         memcached=memcached,
         job_overrides=job_overrides,
         phases=phases,
+    )
+
+
+def load_run_queue_config(path_str: str) -> RunQueueConfig:
+    path = expand_path(path_str)
+    raw = _load_structured_file(path)
+    entries_raw = _require_list(raw.get("entries"), "entries")
+    if not entries_raw:
+        raise ValueError("entries must contain at least one queue entry")
+
+    base_dir = path.parent
+    entries: list[QueueEntry] = []
+    for index, entry_raw in enumerate(entries_raw):
+        entry_map = _require_mapping(entry_raw, f"entries[{index}]")
+        policy_path = expand_path(
+            _require_str(entry_map.get("policy"), f"entries[{index}].policy"),
+            base_dir,
+        )
+        if not policy_path.exists():
+            raise FileNotFoundError(f"Queue policy does not exist: {policy_path}")
+        runs = _require_int(entry_map.get("runs", 1), f"entries[{index}].runs")
+        if runs < 1:
+            raise ValueError(f"entries[{index}].runs must be at least 1")
+        entries.append(QueueEntry(policy_path=policy_path, runs=runs))
+
+    return RunQueueConfig(
+        config_path=path,
+        queue_name=_require_str(raw.get("queue_name", path.stem), "queue_name"),
+        entries=tuple(entries),
     )

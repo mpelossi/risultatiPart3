@@ -10,9 +10,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .catalog import JOB_CATALOG
-from .cluster import ClusterController
+from .cluster import BENCHMARK_NODETYPES, ClusterController
 from .collect import collect_describes, collect_live_pods, summarize_run
-from .config import ExperimentConfig, Phase, PolicyConfig
+from .config import ExperimentConfig, Phase, PolicyConfig, RunQueueConfig, load_policy_config
 from .debug import format_debug_command_hint, summarize_provisioning_hints
 from .manifests import (
     ResolvedBatchJob,
@@ -25,7 +25,7 @@ from .manifests import (
     resolve_precache_pods,
 )
 from .provision import ProvisioningError, assert_client_provisioning
-from .utils import append_log, ensure_directory, run_id_timestamp
+from .utils import append_log, ensure_directory, run_id_timestamp, write_json
 
 
 @dataclass
@@ -47,6 +47,7 @@ class ExperimentRunner:
     final_pod_metadata_wait_s = 30.0
     measurement_stop_int_grace_s = 10.0
     measurement_stop_term_grace_s = 5.0
+    mcperf_agent_start_timeout_s = 20.0
     precache_completion_timeout_s = 900
     precache_cleanup_timeout_s = 120
 
@@ -142,6 +143,49 @@ class ExperimentRunner:
             for phase in self.policy.phases
         ]
 
+    def _capture_node_platforms(
+        self,
+        *,
+        run_dir: Path,
+        log_path: Path,
+        nodes: dict[str, object],
+    ) -> dict[str, object]:
+        self._log(log_path, "Capturing benchmark node CPU platforms")
+        try:
+            node_platforms = self.cluster.capture_benchmark_node_platforms(nodes=nodes)
+        except Exception as exc:
+            node_platforms = {
+                "capture_status": "error",
+                "zone": self.experiment.zone,
+                "nodes": {},
+                "errors": [str(exc)],
+            }
+            self._log(log_path, f"Warning: failed to capture benchmark node CPU platforms: {exc}")
+        else:
+            status = node_platforms.get("capture_status")
+            if status == "ok":
+                platforms_by_node = node_platforms.get("nodes", {})
+                details: list[str] = []
+                if isinstance(platforms_by_node, dict):
+                    for nodetype in BENCHMARK_NODETYPES:
+                        raw_info = platforms_by_node.get(nodetype)
+                        if not isinstance(raw_info, dict):
+                            continue
+                        machine_type = raw_info.get("machine_type") or "machine n/a"
+                        cpu_platform = raw_info.get("cpu_platform") or "CPU platform n/a"
+                        details.append(f"{nodetype}={machine_type}/{cpu_platform}")
+                suffix = ": " + ", ".join(details) if details else ""
+                self._log(log_path, f"Benchmark node CPU platform capture complete{suffix}")
+            else:
+                errors = node_platforms.get("errors", [])
+                if isinstance(errors, list) and errors:
+                    error_text = "; ".join(str(error) for error in errors)
+                else:
+                    error_text = f"status={status}"
+                self._log(log_path, f"Warning: benchmark node CPU platform capture incomplete: {error_text}")
+        write_json(run_dir / "node_platforms.json", node_platforms)
+        return node_platforms
+
     def _bash_lc(self, script: str) -> str:
         return f"bash -lc {shlex.quote(script)}"
 
@@ -225,7 +269,46 @@ class ExperimentRunner:
                 f"Failed to send SIG{signal_name} to the mcperf measurement wrapper: {result.combined_output}"
             )
 
-    def _restart_mcperf_agents(
+    def _abort_measurement_start(self, handle: MeasurementHandle) -> None:
+        if handle.process.poll() is not None:
+            return
+        handle.stop_requested = True
+        try:
+            self._send_measurement_signal(handle, "TERM")
+        except RuntimeError:
+            handle.process.terminate()
+            return
+        try:
+            handle.process.wait(timeout=self.measurement_stop_term_grace_s)
+        except subprocess.TimeoutExpired:
+            handle.process.terminate()
+        handle.reader_thread.join(timeout=5)
+
+    def _mcperf_agent_is_active(self, node_name: str) -> bool:
+        result = self.cluster.ssh(
+            node_name,
+            self._bash_lc("sudo systemctl is-active --quiet mcperf-agent.service"),
+            check=False,
+        )
+        return result.returncode == 0
+
+    def _mcperf_agent_diagnostics(self, node_name: str) -> str:
+        script = "\n".join(
+            [
+                "set +e",
+                'echo "--- systemctl status mcperf-agent.service ---"',
+                "sudo systemctl status mcperf-agent.service --no-pager -l",
+                'echo "--- journalctl -u mcperf-agent.service ---"',
+                "sudo journalctl -u mcperf-agent.service -n 80 --no-pager",
+                'echo "--- pgrep -a mcperf ---"',
+                "pgrep -a mcperf",
+                "exit 0",
+            ]
+        )
+        result = self.cluster.ssh(node_name, self._bash_lc(script), check=False)
+        return result.combined_output
+
+    def _ensure_mcperf_agents_active(
         self,
         *,
         nodes: dict[str, object],
@@ -238,28 +321,45 @@ class ExperimentRunner:
             node_name = getattr(node, "name", None)
             if not isinstance(node_name, str) or not node_name:
                 raise RuntimeError(f"Missing Kubernetes node name for {nodetype}")
+
             self._log(log_path, f"Restarting mcperf-agent.service on {nodetype} ({node_name})")
             script = "\n".join(
                 [
-                    "set -euo pipefail",
+                    "set +e",
+                    "sudo systemctl reset-failed mcperf-agent.service",
+                    'reset_status="$?"',
                     "sudo systemctl restart mcperf-agent.service",
-                    "deadline=$((SECONDS + 20))",
-                    'while [ "$SECONDS" -lt "$deadline" ]; do',
-                    "  if sudo systemctl is-active --quiet mcperf-agent.service; then",
-                    "    sleep 1",
-                    "    exit 0",
-                    "  fi",
-                    "  sleep 1",
-                    "done",
-                    "sudo systemctl status mcperf-agent.service --no-pager -l",
-                    "exit 1",
+                    'restart_status="$?"',
+                    'echo "reset_failed_status=$reset_status restart_status=$restart_status"',
+                    'if [ "$reset_status" -ne 0 ] || [ "$restart_status" -ne 0 ]; then',
+                    "  exit 1",
+                    "fi",
                 ]
             )
             result = self.cluster.ssh(node_name, self._bash_lc(script), check=False)
             if result.returncode != 0:
+                suffix = f": {result.combined_output}" if result.combined_output else ""
+                self._log(
+                    log_path,
+                    "Warning: mcperf-agent.service restart command returned nonzero on "
+                    f"{nodetype} ({node_name}); continuing to poll active state{suffix}",
+                )
+
+            deadline = self._current_time() + self.mcperf_agent_start_timeout_s
+            while self._current_time() < deadline:
+                if self._mcperf_agent_is_active(node_name):
+                    self._log(log_path, f"mcperf-agent.service active on {nodetype} ({node_name})")
+                    break
+                self._sleep(min(self.poll_interval_s, max(deadline - self._current_time(), 0.0)))
+            else:
+                if self._mcperf_agent_is_active(node_name):
+                    self._log(log_path, f"mcperf-agent.service active on {nodetype} ({node_name})")
+                    continue
+                diagnostics = self._mcperf_agent_diagnostics(node_name)
+                suffix = f"\n{diagnostics}" if diagnostics else ""
                 raise RuntimeError(
-                    f"mcperf-agent.service did not become active on {nodetype} ({node_name}): "
-                    f"{result.combined_output}"
+                    f"mcperf-agent.service did not become active on {nodetype} ({node_name})"
+                    f"{suffix}"
                 )
 
     def _line_has_mcperf_sync_error(self, line: str) -> bool:
@@ -416,7 +516,7 @@ class ExperimentRunner:
         deadline = time.monotonic() + self.experiment.measurement.max_start_wait_s
         while time.monotonic() < deadline:
             if handle.error_event.is_set():
-                handle.process.terminate()
+                self._abort_measurement_start(handle)
                 details = "; ".join(message for message in handle.error_messages if message)
                 suffix = f": {details}" if details else ""
                 raise RuntimeError(f"mcperf measurement failed during agent synchronization{suffix}")
@@ -430,7 +530,7 @@ class ExperimentRunner:
                     suffix = f": {details}" if details else ""
                     raise RuntimeError(f"mcperf measurement failed during agent synchronization{suffix}")
                 raise RuntimeError(f"mcperf measurement exited before the first sample with code {return_code}")
-        handle.process.terminate()
+        self._abort_measurement_start(handle)
         raise TimeoutError("mcperf measurement did not produce a latency sample in time")
 
     def _wait_for_measurement_finish(self, handle: MeasurementHandle, *, timeout_s: float | None = None) -> None:
@@ -726,7 +826,8 @@ class ExperimentRunner:
         agent_b_ip = nodes["client-agent-b"].internal_ip
         if not agent_a_ip or not agent_b_ip:
             raise RuntimeError("Agent internal IPs are missing")
-        self._restart_mcperf_agents(nodes=nodes, log_path=log_path)
+        node_platforms = self._capture_node_platforms(run_dir=run_dir, log_path=log_path, nodes=nodes)
+        self._ensure_mcperf_agents_active(nodes=nodes, log_path=log_path)
 
         self._log(log_path, f"Starting measurement against memcached IP {memcached_ip}")
         measurement = self._start_measurement(
@@ -765,6 +866,7 @@ class ExperimentRunner:
             policy_name=self.policy.policy_name,
             run_id=run_id,
             expected_jobs=set(JOB_CATALOG),
+            node_platforms=node_platforms,
         )
         if summary["overall_status"] != "pass":
             collect_describes(
@@ -793,3 +895,39 @@ class ExperimentRunner:
             print(f"Finished run {index}/{runs}: {run_dir}")
         print("Batch complete")
         return run_dirs
+
+
+def run_policy_queue(
+    experiment: ExperimentConfig,
+    queue: RunQueueConfig,
+    *,
+    dry_run: bool = False,
+    precache: bool = False,
+) -> list[Path]:
+    if dry_run and precache:
+        raise ValueError("--precache cannot be combined with --dry-run")
+    run_dirs: list[Path] = []
+    entry_label = "entry" if len(queue.entries) == 1 else "entries"
+    print(f"Starting queue {queue.queue_name} with {len(queue.entries)} {entry_label}")
+    precache_consumed = False
+    for index, entry in enumerate(queue.entries, start=1):
+        policy = load_policy_config(str(entry.policy_path))
+        runner = ExperimentRunner(experiment, policy)
+        entry_precache = precache and not precache_consumed
+        print(
+            "Starting queue entry "
+            f"{index}/{len(queue.entries)}: {entry.policy_path} ({entry.runs} run(s))"
+        )
+        if entry.runs == 1:
+            entry_run_dirs = [runner.run_once(dry_run=dry_run, precache=entry_precache)]
+        else:
+            entry_run_dirs = runner.run_batch(entry.runs, dry_run=dry_run, precache=entry_precache)
+        run_dirs.extend(entry_run_dirs)
+        if precache and not dry_run:
+            precache_consumed = True
+        print(
+            "Finished queue entry "
+            f"{index}/{len(queue.entries)}: {entry.policy_path} ({len(entry_run_dirs)} run(s))"
+        )
+    print("Queue complete")
+    return run_dirs

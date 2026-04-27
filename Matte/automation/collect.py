@@ -20,6 +20,7 @@ def summarize_run(
     policy_name: str,
     run_id: str,
     expected_jobs: set[str],
+    node_platforms: dict[str, object] | None = None,
 ) -> dict[str, object]:
     pods_path = resolve_existing_run_results_path(run_dir)
     mcperf_path = run_dir / "mcperf.txt"
@@ -30,6 +31,7 @@ def summarize_run(
         run_id=run_id,
         experiment_id=experiment_id,
         policy_name=policy_name,
+        node_platforms=node_platforms,
     )
     write_json(run_dir / "summary.json", summary)
     return summary
