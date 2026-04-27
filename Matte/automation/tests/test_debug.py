@@ -259,6 +259,25 @@ class FailureSurfaceTests(unittest.TestCase):
         self.assertEqual(launch_run_viewer.call_args.kwargs["port"], 8000)
         self.assertEqual(launch_run_viewer.call_args.kwargs["open_browser"], True)
 
+    def test_stats_rebuild_uses_automation_runs_directory_by_default(self) -> None:
+        output = io.StringIO()
+        expected_root = Path(cli.__file__).resolve().parent / "runs"
+
+        with patch(
+            "Matte.automation.cli.rebuild_runtime_stats_file",
+            return_value={
+                "output_path": str(expected_root / "runtime_stats.json"),
+                "sample_count": 7,
+                "eligible_run_count": 1,
+            },
+        ) as rebuild_runtime_stats:
+            with redirect_stdout(output):
+                cli.main(["stats", "rebuild"])
+
+        self.assertEqual(rebuild_runtime_stats.call_args.args[0], expected_root.resolve())
+        self.assertIn("Runtime stats rebuilt:", output.getvalue())
+        self.assertIn("samples=7", output.getvalue())
+
     def test_results_viewer_can_disable_browser_open(self) -> None:
         with patch("Matte.automation.cli.launch_run_viewer", return_value=0) as launch_run_viewer:
             cli.main(["results", "viewer", "--no-open"])

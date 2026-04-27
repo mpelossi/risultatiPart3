@@ -25,6 +25,7 @@ from .manifests import (
     resolve_precache_pods,
 )
 from .provision import ProvisioningError, assert_client_provisioning
+from .runtime_stats import rebuild_runtime_stats_file
 from .utils import append_log, ensure_directory, run_id_timestamp, write_json
 
 
@@ -185,6 +186,20 @@ class ExperimentRunner:
                 self._log(log_path, f"Warning: benchmark node CPU platform capture incomplete: {error_text}")
         write_json(run_dir / "node_platforms.json", node_platforms)
         return node_platforms
+
+    def _refresh_runtime_stats(self, *, log_path: Path) -> None:
+        try:
+            payload = rebuild_runtime_stats_file(self.experiment.results_root)
+        except Exception as exc:
+            self._log(log_path, f"Warning: failed to refresh runtime stats: {exc}")
+            return
+        self._log(
+            log_path,
+            "Runtime stats refreshed: "
+            f"{payload.get('output_path')} "
+            f"samples={payload.get('sample_count')} "
+            f"eligible_runs={payload.get('eligible_run_count')}",
+        )
 
     def _bash_lc(self, script: str) -> str:
         return f"bash -lc {shlex.quote(script)}"
@@ -881,6 +896,7 @@ class ExperimentRunner:
             f"{summary['overall_status']} makespan={summary.get('makespan_s')} "
             f"max_p95_us={summary.get('max_observed_p95_us')}",
         )
+        self._refresh_runtime_stats(log_path=log_path)
         return run_dir
 
     def run_batch(self, runs: int, *, dry_run: bool = False, precache: bool = False) -> list[Path]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,45 @@ def _write_times_csv(path: Path) -> None:
         lines.append(f"{job_id},4,{5 * index}.0")
         lines.append(f"{job_id},8,{3 * index}.0")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_runtime_stats(path: Path) -> None:
+    exact = []
+    for index, job_id in enumerate(JOB_CATALOG, start=1):
+        for memcached_node, multiplier in ((NODE_B, 1), (NODE_A, 10)):
+            duration = float(index * multiplier)
+            exact.append(
+                {
+                    "key": {
+                        "job": job_id,
+                        "node": NODE_A,
+                        "threads": 1,
+                        "memcached_node": memcached_node,
+                    },
+                    "sample_count": 1,
+                    "median_s": duration,
+                    "mean_s": duration,
+                    "min_s": duration,
+                    "max_s": duration,
+                    "source_runs": ["demo/run-1"],
+                }
+            )
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated_at": "2026-01-01T00:00:00Z",
+                "results_root": str(path.parent),
+                "sample_count": len(exact),
+                "samples": [],
+                "aggregates": {"exact": exact, "same_node": [], "node": []},
+                "skipped_runs": [],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _policy_payload(name: str, *, memcached_node: str = NODE_B) -> dict[str, object]:
@@ -137,6 +177,38 @@ class ScheduleViewerDataTests(unittest.TestCase):
             node_a_segments = preview["prediction"]["timeline"]["lanes"][0]["segments"]
             self.assertEqual([segment["job_id"] for segment in node_a_segments], ["memcached"])
             self.assertEqual(node_a_segments[0]["planned_node"], NODE_A)
+
+    def test_runtime_stats_make_predictions_sensitive_to_memcached_node(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            schedules_dir = root / "schedules"
+            schedules_dir.mkdir()
+            times_csv = root / "times.csv"
+            runtime_stats = root / "runtime_stats.json"
+            _write_times_csv(times_csv)
+            _write_runtime_stats(runtime_stats)
+            write_json_config(schedules_dir / "schedule1.yaml", _policy_payload("candidate-1"))
+            payload = load_schedule_view(
+                schedules_dir=schedules_dir,
+                schedule_queue_path=None,
+                times_csv_path=times_csv,
+                runtime_stats_path=runtime_stats,
+                schedule_id="schedule1.yaml",
+            )
+
+            mem_b_makespan = payload["prediction"]["makespan_s"]
+            editor = payload["editor"]
+            editor["memcached"] = {"node": NODE_A, "cores": "0", "threads": 1}
+            preview = preview_schedule_view(
+                times_csv_path=times_csv,
+                runtime_stats_path=runtime_stats,
+                payload={"editor": editor},
+            )
+
+            self.assertEqual(payload["prediction"]["status"], "ok")
+            self.assertEqual(preview["prediction"]["status"], "ok")
+            self.assertNotEqual(preview["prediction"]["makespan_s"], mem_b_makespan)
+            self.assertGreater(preview["prediction"]["makespan_s"], mem_b_makespan)
 
     def test_preview_reports_core_overlap_validation_errors(self) -> None:
         with temp_workspace() as workspace:

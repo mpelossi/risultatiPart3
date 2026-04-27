@@ -802,6 +802,49 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
             self.assertEqual(cluster.applied_job_ids, ["blackscholes"])
             self.assertEqual(cluster.precache_pod_names, set())
 
+    def test_run_once_refreshes_runtime_stats_after_real_run(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, _cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+            stats_path = root / "runs" / "runtime_stats.json"
+
+            with patch(
+                "Matte.automation.runner.rebuild_runtime_stats_file",
+                return_value={
+                    "output_path": str(stats_path),
+                    "sample_count": 7,
+                    "eligible_run_count": 1,
+                },
+            ) as rebuild_runtime_stats:
+                run_dir = self._run_once(runner)
+
+            self.assertEqual(rebuild_runtime_stats.call_args.args[0], runner.experiment.results_root)
+            events_log = (run_dir / "events.log").read_text(encoding="utf-8")
+            self.assertIn("Runtime stats refreshed:", events_log)
+            self.assertIn("samples=7", events_log)
+
+    def test_runtime_stats_refresh_failure_is_warning_only(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, _cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+
+            with patch(
+                "Matte.automation.runner.rebuild_runtime_stats_file",
+                side_effect=RuntimeError("stats unavailable"),
+            ):
+                run_dir = self._run_once(runner)
+
+            events_log = (run_dir / "events.log").read_text(encoding="utf-8")
+            self.assertIn("Warning: failed to refresh runtime stats: stats unavailable", events_log)
+
     def test_run_once_precache_failure_aborts_before_memcached(self) -> None:
         with temp_workspace() as workspace:
             root = Path(workspace)

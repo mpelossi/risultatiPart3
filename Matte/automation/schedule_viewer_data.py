@@ -13,6 +13,7 @@ from .audit import (
     audit_schedule,
     build_schedule_model,
     dependency_text,
+    estimate_runtime_detail,
     estimate_runtime,
     load_runtime_table,
     load_schedule_model,
@@ -20,6 +21,7 @@ from .audit import (
 )
 from .catalog import JOB_CATALOG, NODE_A, NODE_B, NODE_CORE_COUNTS, suggested_core_sets
 from .config import load_policy_config, load_run_queue_config
+from .runtime_stats import RuntimeStatsIndex, load_runtime_stats
 
 
 NODE_META = (
@@ -28,11 +30,71 @@ NODE_META = (
 )
 
 
+class _HybridRuntimeSource:
+    def __init__(
+        self,
+        *,
+        runtime_stats: RuntimeStatsIndex | None,
+        runtime_stats_path: Path | None,
+        csv_table,
+    ) -> None:
+        self.runtime_stats = runtime_stats
+        self.runtime_stats_path = runtime_stats_path
+        self.csv_table = csv_table
+        self.csv_is_fallback = runtime_stats_path is not None
+        if runtime_stats is not None:
+            self.source_path = runtime_stats.source_path
+            self.source_label = str(runtime_stats.source_path)
+        elif csv_table is not None:
+            self.source_path = csv_table.source_path
+            self.source_label = str(csv_table.source_path)
+        else:
+            self.source_path = runtime_stats_path or Path("runtime_stats.json")
+            self.source_label = str(self.source_path)
+
+    def estimate(
+        self,
+        *,
+        job_id: str,
+        node: str | None,
+        threads: int,
+        memcached_node: str | None,
+    ):
+        if self.runtime_stats is not None and node is not None and memcached_node is not None:
+            estimate = self.runtime_stats.estimate(
+                job_id=job_id,
+                node=node,
+                threads=threads,
+                memcached_node=memcached_node,
+            )
+            if estimate is not None:
+                return estimate
+        if self.csv_table is None:
+            return None
+        duration = estimate_runtime(job_id, threads, self.csv_table)
+        if duration is None:
+            return None
+        match_type = "csv" if self.csv_is_fallback else "exact"
+        message = None
+        if self.csv_is_fallback:
+            message = (
+                f"Using CSV fallback for {job_id} with {threads} thread(s); "
+                "no run-derived runtime sample matched."
+            )
+        return {
+            "duration_s": duration,
+            "source": str(self.csv_table.source_path),
+            "match_type": match_type,
+            "message": message,
+        }
+
+
 def list_schedule_view(
     *,
     schedules_dir: Path,
     schedule_queue_path: Path | None,
     times_csv_path: Path,
+    runtime_stats_path: Path | None = None,
 ) -> dict[str, object]:
     schedule_paths = _discover_schedule_paths(schedules_dir)
     queue_payload, queue_paths, queue_error = _load_queue_listing(schedule_queue_path)
@@ -79,7 +141,7 @@ def list_schedule_view(
             "error": queue_error,
         },
         "default_schedule_id": default_schedule_id,
-        "metrics_source": str(times_csv_path),
+        "metrics_source": _runtime_source_label(runtime_stats_path, times_csv_path),
         "catalog": _catalog_view(),
     }
 
@@ -89,6 +151,7 @@ def load_schedule_view(
     schedules_dir: Path,
     schedule_queue_path: Path | None,
     times_csv_path: Path,
+    runtime_stats_path: Path | None = None,
     schedule_id: str,
 ) -> dict[str, object]:
     schedule_path = _resolve_schedule_id(
@@ -100,17 +163,24 @@ def load_schedule_view(
     return _build_schedule_payload(
         model=model,
         times_csv_path=times_csv_path,
+        runtime_stats_path=runtime_stats_path,
         schedule_id=schedule_id,
         schedule_path=schedule_path,
     )
 
 
-def preview_schedule_view(*, times_csv_path: Path, payload: dict[str, Any]) -> dict[str, object]:
+def preview_schedule_view(
+    *,
+    times_csv_path: Path,
+    runtime_stats_path: Path | None = None,
+    payload: dict[str, Any],
+) -> dict[str, object]:
     model = _model_from_editor_payload(payload)
     schedule_id = str(payload.get("schedule_id") or "preview")
     return _build_schedule_payload(
         model=model,
         times_csv_path=times_csv_path,
+        runtime_stats_path=runtime_stats_path,
         schedule_id=schedule_id,
         schedule_path=None,
     )
@@ -120,21 +190,40 @@ def _build_schedule_payload(
     *,
     model: ScheduleModel,
     times_csv_path: Path,
+    runtime_stats_path: Path | None,
     schedule_id: str,
     schedule_path: Path | None,
 ) -> dict[str, object]:
-    runtime_table = load_runtime_table(str(times_csv_path))
-    report = audit_schedule(model, runtime_table)
+    runtime_source = _load_runtime_source(runtime_stats_path, times_csv_path)
+    report = audit_schedule(model, runtime_source)
     return {
         "schedule_id": schedule_id,
         "path": str(schedule_path) if schedule_path is not None else None,
         "policy_name": model.policy_name,
-        "editor": _editor_view(model, runtime_table),
+        "editor": _editor_view(model, runtime_source),
         "prediction": _prediction_view(report),
         "yaml": serialize_simple_schedule(model),
-        "metrics_source": str(runtime_table.source_path),
+        "metrics_source": runtime_source.source_label,
         "catalog": _catalog_view(),
     }
+
+
+def _load_runtime_source(runtime_stats_path: Path | None, times_csv_path: Path) -> _HybridRuntimeSource:
+    runtime_stats = None
+    if runtime_stats_path is not None and runtime_stats_path.exists():
+        runtime_stats = load_runtime_stats(runtime_stats_path)
+    csv_table = load_runtime_table(str(times_csv_path)) if times_csv_path.exists() else None
+    return _HybridRuntimeSource(
+        runtime_stats=runtime_stats,
+        runtime_stats_path=runtime_stats_path,
+        csv_table=csv_table,
+    )
+
+
+def _runtime_source_label(runtime_stats_path: Path | None, times_csv_path: Path) -> str:
+    if runtime_stats_path is not None and runtime_stats_path.exists():
+        return str(runtime_stats_path)
+    return str(times_csv_path)
 
 
 def serialize_simple_schedule(model: ScheduleModel) -> str:
@@ -274,7 +363,7 @@ def _catalog_view() -> dict[str, object]:
     }
 
 
-def _editor_view(model: ScheduleModel, runtime_table) -> dict[str, object]:
+def _editor_view(model: ScheduleModel, runtime_source) -> dict[str, object]:
     return {
         "policy_name": model.policy_name,
         "memcached": {
@@ -291,11 +380,22 @@ def _editor_view(model: ScheduleModel, runtime_table) -> dict[str, object]:
                 "threads": job.threads,
                 "after": dependency_text(job.dependencies),
                 "delay_s": job.delay_s,
-                "runtime_s": estimate_runtime(job.job_id, job.threads, runtime_table),
+                "runtime_s": _editor_runtime_s(model, job, runtime_source),
             }
             for index, job in enumerate(sorted(model.jobs.values(), key=lambda item: (item.order, item.job_id)))
         ],
     }
+
+
+def _editor_runtime_s(model: ScheduleModel, job: AuditJob, runtime_source) -> float | None:
+    estimate = estimate_runtime_detail(
+        job.job_id,
+        job.threads,
+        runtime_source,
+        node=job.node,
+        memcached_node=model.memcached.node,
+    )
+    return estimate.duration_s if estimate is not None else None
 
 
 def _prediction_view(report: AuditReport) -> dict[str, object]:

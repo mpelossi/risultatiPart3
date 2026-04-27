@@ -61,6 +61,9 @@ python3 cli.py show --policy schedule.yaml
 python3 cli.py audit --policy schedule.yaml --times-csv ../../Part2summary_times.csv
 ```
 
+`audit` still uses the old Part 2 CSV as a simple static checker. The schedule viewer uses
+run-derived `runs/runtime_stats.json` when that file exists.
+
 If you want to edit the schedule visually, open the planner GUI from this directory with:
 
 ```bash
@@ -125,6 +128,18 @@ Each `policy` path is resolved relative to the queue file. `runs: 1` behaves lik
 `run once`; larger values behave like `run batch`. With `--precache`, images are warmed
 only before the first real queued run.
 
+### 7c. Rebuild runtime stats from saved runs
+
+Real runs refresh `runs/runtime_stats.json` automatically. If you want to backfill from
+old runs, or you edited/copied run artifacts by hand, rebuild it explicitly:
+
+```bash
+python3 cli.py stats rebuild --results-root runs
+```
+
+The schedule viewer uses this file for theoretical predictions before falling back to
+`../../Part2summary_times.csv`.
+
 ### 8. See the best run
 
 ```bash
@@ -138,7 +153,8 @@ python3 cli.py results viewer --experiment part3-handcrafted
 ```
 
 The viewer serves the frontend from this automation directory, reads `runs/` by default,
-and opens your browser automatically.
+uses `runs/runtime_stats.json` for schedule predictions when available, and opens your
+browser automatically.
 
 ### 9. Export submission files
 
@@ -355,6 +371,11 @@ Every real run also writes `node_platforms.json` and copies that data into `summ
 This records the GCP `cpuPlatform` and machine type for the benchmark nodes
 `node-a-8core` and `node-b-4core`, so n2d Rome/Milan placement is visible after the run.
 
+Every real run also refreshes `runs/runtime_stats.json` from the saved run history. This
+file stores per-job observed runtimes grouped by job, node, thread count, and memcached
+placement. Refresh failure is logged as a warning and does not mark the benchmark run as
+failed.
+
 If you already warmed the images on this cluster, you may omit `--precache` on later
 single runs. Re-running it is not harmful; it just creates short-lived image-warmup pods
 and deletes them before memcached starts.
@@ -375,6 +396,19 @@ Use this when you want the three measurement files needed for submission. With `
 the warmup happens once before the first run only.
 
 ### Step 8. Pick the best run
+
+If this checkout already contains run artifacts, or you copied run folders in manually,
+first rebuild the run-derived runtime statistics:
+
+```bash
+python3 cli.py stats rebuild --results-root runs
+```
+
+The rebuild scans `runs/<experiment>/<run-id>/`, reads `summary.json`, `policy.yaml`, and
+`node_platforms.json` when present, and writes `runs/runtime_stats.json`. The schedule
+viewer uses median observed runtime from this file, grouped by job, node, thread count,
+and memcached node. If no matching sample exists, it falls back to broader run-derived
+groups and then to `../../Part2summary_times.csv`.
 
 Run:
 
@@ -449,6 +483,11 @@ Runs the same experiment multiple times.
 
 Runs each schedule listed in a queue file, stopping on the first runner exception.
 
+### `python3 cli.py stats rebuild --results-root runs`
+
+Rebuilds `runs/runtime_stats.json` from saved run artifacts. Use it after copying old runs
+into `runs/` or whenever you want to force a deterministic full refresh.
+
 ### `python3 cli.py results best --experiment part3-handcrafted`
 
 Shows the best completed runs according to the built-in ranking.
@@ -463,6 +502,8 @@ Useful options:
 - `--host 0.0.0.0` makes the viewer reachable from another machine that can access the port
 - `--port 8080` chooses a different port
 - `--results-root /path/to/runs` reads a different results directory
+- `--runtime-stats /path/to/runtime_stats.json` reads a different run-derived stats file
+- `--times-csv /path/to/Part2summary_times.csv` changes the legacy fallback timing file
 
 You can also run the same viewer directly:
 
@@ -566,6 +607,9 @@ a desktop session or use X11 forwarding.
 
 - The main scheduling file is `schedule.yaml`.
 - `python3 gui.py` opens `schedule.yaml` and `../../Part2summary_times.csv` by default.
+- The schedule viewer uses `runs/runtime_stats.json` first for predictions, then falls
+  back to `../../Part2summary_times.csv` when needed.
 - `run once` does **not** create the cluster for you.
 - `cluster up` is a separate step from `run once`.
-- The Part 2 timing reference file is `../../Part2summary_times.csv` from this folder.
+- The Part 2 timing reference file is still `../../Part2summary_times.csv` from this
+  folder, but it is now the compatibility fallback rather than the primary predictor.

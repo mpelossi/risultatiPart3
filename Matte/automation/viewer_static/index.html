@@ -94,7 +94,17 @@
           <p class="mb-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">All History</p>
           <h2 class="m-0 font-serif text-3xl font-semibold tracking-[-0.03em]">Past Submissions</h2>
         </div>
-        <p id="history-count" class="mt-2.5 max-w-[720px] text-[var(--muted)] leading-6" aria-live="polite"></p>
+        <div class="flex flex-wrap items-center justify-end gap-3 max-[720px]:justify-start">
+          <button
+            id="history-sort-button"
+            class="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-900/15 bg-white/80 px-5 py-3 text-sm font-bold text-[var(--page-ink)] shadow-sm transition hover:-translate-y-px hover:bg-white focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--selected-ring)]"
+            type="button"
+            aria-pressed="false"
+          >
+            Sort by Time
+          </button>
+          <p id="history-count" class="m-0 max-w-[720px] text-[var(--muted)] leading-6" aria-live="polite"></p>
+        </div>
       </div>
       <div id="history-grid" class="grid grid-cols-2 gap-5 max-[1080px]:grid-cols-1"></div>
     </section>

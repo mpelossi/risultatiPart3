@@ -55,6 +55,15 @@ class RuntimeTable:
 
 
 @dataclass(frozen=True)
+class RuntimeEstimate:
+    duration_s: float
+    source: str
+    match_type: str
+    sample_count: int | None = None
+    message: str | None = None
+
+
+@dataclass(frozen=True)
 class AuditIssue:
     level: str
     message: str
@@ -148,6 +157,66 @@ def estimate_runtime(job_id: str, threads: int, runtime_table: RuntimeTable) -> 
         ratio = (threads - lower_threads) / span
         return lower_duration + ((upper_duration - lower_duration) * ratio)
     return None
+
+
+def estimate_runtime_detail(
+    job_id: str,
+    threads: int,
+    runtime_source,
+    *,
+    node: str | None = None,
+    memcached_node: str | None = None,
+) -> RuntimeEstimate | None:
+    estimator = getattr(runtime_source, "estimate", None)
+    if callable(estimator):
+        raw_estimate = estimator(
+            job_id=job_id,
+            node=node,
+            threads=threads,
+            memcached_node=memcached_node,
+        )
+        if raw_estimate is None:
+            return None
+        return RuntimeEstimate(
+            duration_s=float(_estimate_value(raw_estimate, "duration_s")),
+            source=str(_estimate_value(raw_estimate, "source", "")),
+            match_type=str(_estimate_value(raw_estimate, "match_type", "unknown")),
+            sample_count=_optional_estimate_int(raw_estimate, "sample_count"),
+            message=_optional_estimate_str(raw_estimate, "message"),
+        )
+
+    duration = estimate_runtime(job_id, threads, runtime_source)
+    if duration is None:
+        return None
+    return RuntimeEstimate(
+        duration_s=duration,
+        source=str(runtime_source.source_path),
+        match_type="csv",
+    )
+
+
+def _estimate_value(raw_estimate, key: str, default=None):
+    if isinstance(raw_estimate, dict):
+        return raw_estimate.get(key, default)
+    return getattr(raw_estimate, key, default)
+
+
+def _optional_estimate_int(raw_estimate, key: str) -> int | None:
+    value = _estimate_value(raw_estimate, key)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_estimate_str(raw_estimate, key: str) -> str | None:
+    value = _estimate_value(raw_estimate, key)
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
 
 
 def _optional_str(raw: Any, default: str) -> str:
@@ -451,16 +520,35 @@ def audit_schedule(model: ScheduleModel, runtime_table: RuntimeTable) -> AuditRe
                 )
             )
             continue
-        duration = estimate_runtime(job_id, job.threads, runtime_table)
-        if duration is None:
+        estimate = estimate_runtime_detail(
+            job_id,
+            job.threads,
+            runtime_table,
+            node=job.node,
+            memcached_node=model.memcached.node,
+        )
+        if estimate is None:
             errors.append(
                 AuditIssue(
                     level="error",
-                    message=f"Missing runtime estimate for {job_id} with {job.threads} thread(s)",
+                    message=(
+                        f"Missing runtime estimate for {job_id} on {job.node} "
+                        f"with {job.threads} thread(s)"
+                    ),
                     jobs=(job_id,),
                 )
             )
             continue
+        if estimate.match_type != "exact":
+            warnings.append(
+                AuditIssue(
+                    level="warning",
+                    node=job.node,
+                    jobs=(job_id,),
+                    message=estimate.message or _runtime_fallback_message(job, estimate),
+                )
+            )
+        duration = estimate.duration_s
         start_s = 0.0
         if job.dependencies:
             start_s = max(scheduled_jobs[dependency].end_s for dependency in job.dependencies)
@@ -554,6 +642,16 @@ def audit_schedule(model: ScheduleModel, runtime_table: RuntimeTable) -> AuditRe
         errors=errors,
         warnings=warnings,
         makespan_s=makespan_s,
+    )
+
+
+def _runtime_fallback_message(job: AuditJob, estimate: RuntimeEstimate) -> str:
+    sample_text = ""
+    if estimate.sample_count is not None:
+        sample_text = f" from {estimate.sample_count} sample(s)"
+    return (
+        f"Using {estimate.match_type} runtime estimate for {job.job_id} on {job.node} "
+        f"with {job.threads} thread(s){sample_text}."
     )
 
 

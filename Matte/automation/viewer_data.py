@@ -63,6 +63,85 @@ def load_run_view(results_root: Path, experiment_id: str, run_id: str) -> dict[s
     return _build_run_view(run_dir, experiment_id=experiment_id)
 
 
+def load_run_policy_view(
+    results_root: Path,
+    schedules_dir: Path,
+    experiment_id: str,
+    run_id: str,
+) -> dict[str, object]:
+    experiment_root = resolve_experiment_root(results_root, experiment_id)
+    run_dir = experiment_root / run_id
+    if not run_dir.exists() or not run_dir.is_dir():
+        raise FileNotFoundError(f"Run not found: {run_dir}")
+
+    policy_path = run_dir / "policy.yaml"
+    if not policy_path.exists():
+        return {
+            "experiment_id": experiment_id,
+            "run_id": run_id,
+            "policy_yaml": "",
+            "matches": [],
+            "match_status": "missing_policy",
+            "errors": [f"policy.yaml is missing for run {run_id}."],
+        }
+
+    try:
+        policy_yaml = policy_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return {
+            "experiment_id": experiment_id,
+            "run_id": run_id,
+            "policy_yaml": "",
+            "matches": [],
+            "match_status": "parse_error",
+            "errors": [f"policy.yaml could not be read: {exc}"],
+        }
+
+    run_policy, error = _parse_policy_mapping(policy_yaml, policy_path)
+    if error is not None:
+        return {
+            "experiment_id": experiment_id,
+            "run_id": run_id,
+            "policy_yaml": policy_yaml,
+            "matches": [],
+            "match_status": "parse_error",
+            "errors": [error],
+        }
+
+    assert run_policy is not None
+    run_fingerprint = _policy_fingerprint(run_policy)
+    matches: list[dict[str, object]] = []
+    errors: list[str] = []
+    for schedule_path in _iter_schedule_policy_paths(schedules_dir):
+        try:
+            schedule_yaml = schedule_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            errors.append(f"{schedule_path.name} could not be read: {exc}")
+            continue
+        schedule_policy, schedule_error = _parse_policy_mapping(schedule_yaml, schedule_path)
+        if schedule_error is not None:
+            errors.append(schedule_error)
+            continue
+        assert schedule_policy is not None
+        if _policy_fingerprint(schedule_policy) == run_fingerprint:
+            matches.append(
+                {
+                    "schedule_id": _schedule_id(schedule_path, schedules_dir),
+                    "label": schedule_path.name,
+                    "path": str(schedule_path.resolve()),
+                }
+            )
+
+    return {
+        "experiment_id": experiment_id,
+        "run_id": run_id,
+        "policy_yaml": policy_yaml,
+        "matches": matches,
+        "match_status": "matched" if matches else "unmatched",
+        "errors": errors,
+    }
+
+
 def _build_run_view(run_dir: Path, *, experiment_id: str) -> dict[str, object]:
     run_id = run_dir.name
     run_label = format_run_id_label(run_id)
@@ -242,6 +321,46 @@ def _history_sort_key(run: dict[str, object]) -> tuple[float, str]:
     parsed = parse_run_id_timestamp(run_id)
     timestamp = parsed.timestamp() if parsed is not None else float("-inf")
     return (timestamp, run_id)
+
+
+def _parse_policy_mapping(raw: str, path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        import yaml  # type: ignore
+
+        loaded = yaml.safe_load(raw)
+    except ModuleNotFoundError:
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            return None, (
+                f"{path.name} is not valid JSON-compatible YAML. "
+                "Install PyYAML or keep configs in JSON syntax."
+            )
+    except Exception as exc:
+        return None, f"{path.name} could not be parsed: {exc}"
+    if not isinstance(loaded, dict):
+        return None, f"{path.name} must contain a top-level mapping."
+    return loaded, None
+
+
+def _policy_fingerprint(policy: dict[str, Any]) -> str:
+    return json.dumps(policy, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _iter_schedule_policy_paths(schedules_dir: Path):
+    if not schedules_dir.exists():
+        return
+    for path in sorted(schedules_dir.iterdir()):
+        if not path.is_file() or path.name.startswith(".") or path.suffix.lower() not in {".yaml", ".yml"}:
+            continue
+        yield path
+
+
+def _schedule_id(path: Path, schedules_dir: Path) -> str:
+    try:
+        return path.resolve().relative_to(schedules_dir.resolve()).as_posix()
+    except ValueError:
+        return path.name
 
 
 def _existing_snapshot_path(run_dir: Path) -> Path | None:

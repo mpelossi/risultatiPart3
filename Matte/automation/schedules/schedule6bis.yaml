@@ -41,6 +41,6 @@ jobs:
     after: "barnes"
   vips:
     node: "node-b-4core"
-    cores: "2-3"
+    cores: "0-1"
     threads: 2
-    after: "blackscholes"
+    after: "canneal"

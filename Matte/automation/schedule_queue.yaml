@@ -1,13 +1,19 @@
 queue_name: "part3-candidates"
 entries:
-  - policy: "schedules/schedule5bis.yaml"
-    runs: 1
-  - policy: "schedules/schedule6.yaml"
-    runs: 1
-  - policy: "schedules/schedule7.yaml"
-    runs: 1
-  - policy: "schedules/schedule8.yaml"
-    runs: 1
-  - policy: "schedules/schedule9.yaml"
-    runs: 1
+  # - policy: "schedules/schedule6bis.yaml"
+  #   runs: 2
+  # - policy: "schedules/schedule7bis.yaml"
+  #   runs: 2
+  # - policy: "schedules/schedule7bisbis.yaml"
+  #   runs: 2
+  # - policy: "schedules/schedule7bis3.yaml"
+  #   runs: 2
+  # - policy: "schedules/schedule8bis.yaml"
+  #   runs: 2
+  # - policy: "schedules/schedule8bisbis.yaml"
+  #   runs: 2
 
+# NEW
+
+  - policy: "schedules/schedule7B.yaml"
+    runs: 2

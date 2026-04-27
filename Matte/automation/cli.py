@@ -29,11 +29,13 @@ from .runner import ExperimentRunner, run_policy_queue
 from .manifests import resolve_jobs
 from .viewer import (
     DEFAULT_RESULTS_ROOT,
+    DEFAULT_RUNTIME_STATS_PATH,
     DEFAULT_SCHEDULE_QUEUE_PATH,
     DEFAULT_SCHEDULES_DIR,
     DEFAULT_TIMES_CSV_PATH,
     launch_run_viewer,
 )
+from .runtime_stats import rebuild_runtime_stats_file
 
 
 def _default_results_root() -> Path:
@@ -50,6 +52,10 @@ def _default_schedule_queue_path() -> Path:
 
 def _default_times_csv_path() -> Path:
     return DEFAULT_TIMES_CSV_PATH
+
+
+def _default_runtime_stats_path() -> Path:
+    return DEFAULT_RUNTIME_STATS_PATH
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -122,9 +128,16 @@ def _build_parser() -> argparse.ArgumentParser:
     results_viewer.add_argument("--schedules-dir", default=str(_default_schedules_dir()))
     results_viewer.add_argument("--schedule-queue", default=str(_default_schedule_queue_path()))
     results_viewer.add_argument("--times-csv", default=str(_default_times_csv_path()))
+    results_viewer.add_argument("--runtime-stats", default=str(_default_runtime_stats_path()))
     results_viewer.add_argument("--host", default="127.0.0.1")
     results_viewer.add_argument("--port", type=int, default=8000)
     results_viewer.add_argument("--no-open", action="store_true")
+
+    stats_parser = subparsers.add_parser("stats")
+    stats_sub = stats_parser.add_subparsers(dest="stats_command", required=True)
+    stats_rebuild = stats_sub.add_parser("rebuild")
+    stats_rebuild.add_argument("--results-root", default=str(_default_results_root()))
+    stats_rebuild.add_argument("--output")
 
     export_parser = subparsers.add_parser("export")
     export_sub = export_parser.add_subparsers(dest="export_command", required=True)
@@ -294,11 +307,25 @@ def main(argv: list[str] | None = None) -> int:
             schedules_dir=Path(args.schedules_dir).resolve(),
             schedule_queue_path=Path(args.schedule_queue).resolve() if args.schedule_queue else None,
             times_csv_path=Path(args.times_csv).resolve(),
+            runtime_stats_path=Path(args.runtime_stats).resolve() if args.runtime_stats else None,
             experiment_id=args.experiment,
             host=args.host,
             port=args.port,
             open_browser=not args.no_open,
         )
+
+    if args.command == "stats" and args.stats_command == "rebuild":
+        payload = rebuild_runtime_stats_file(
+            Path(args.results_root).resolve(),
+            output_path=Path(args.output).resolve() if args.output else None,
+        )
+        print(
+            "Runtime stats rebuilt:",
+            payload.get("output_path"),
+            f"samples={payload.get('sample_count')}",
+            f"eligible_runs={payload.get('eligible_run_count')}",
+        )
+        return 0
 
     if args.command == "export" and args.export_command == "submission":
         output_dir = export_submission(

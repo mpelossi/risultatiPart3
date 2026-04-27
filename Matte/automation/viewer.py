@@ -18,7 +18,7 @@ if __package__ in {None, ""}:
 
 from .results import resolve_experiment_root
 from .schedule_viewer_data import list_schedule_view, load_schedule_view, preview_schedule_view
-from .viewer_data import list_run_experiments, load_experiment_view, load_run_view
+from .viewer_data import list_run_experiments, load_experiment_view, load_run_policy_view, load_run_view
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "viewer_static"
@@ -26,6 +26,7 @@ DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parent / "runs"
 DEFAULT_SCHEDULES_DIR = Path(__file__).resolve().parent / "schedules"
 DEFAULT_SCHEDULE_QUEUE_PATH = Path(__file__).resolve().parent / "schedule_queue.yaml"
 DEFAULT_TIMES_CSV_PATH = Path(__file__).resolve().parents[2] / "Part2summary_times.csv"
+DEFAULT_RUNTIME_STATS_PATH = DEFAULT_RESULTS_ROOT / "runtime_stats.json"
 
 
 class _RunViewerHandler(SimpleHTTPRequestHandler):
@@ -36,6 +37,7 @@ class _RunViewerHandler(SimpleHTTPRequestHandler):
         schedules_dir: Path,
         schedule_queue_path: Path | None,
         times_csv_path: Path,
+        runtime_stats_path: Path | None,
         default_experiment_id: str | None,
         **kwargs,
     ) -> None:
@@ -43,6 +45,7 @@ class _RunViewerHandler(SimpleHTTPRequestHandler):
         self.schedules_dir = schedules_dir
         self.schedule_queue_path = schedule_queue_path
         self.times_csv_path = times_csv_path
+        self.runtime_stats_path = runtime_stats_path
         self.default_experiment_id = default_experiment_id
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
@@ -88,6 +91,12 @@ class _RunViewerHandler(SimpleHTTPRequestHandler):
                 self._write_json(200, load_experiment_view(self.results_root, experiment_id))
                 return
 
+            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/policy"):
+                run_id = unquote(parsed.path.removeprefix("/api/runs/").removesuffix("/policy"))
+                experiment_id = self._resolve_experiment_id(parse_qs(parsed.query))
+                self._write_json(200, load_run_policy_view(self.results_root, self.schedules_dir, experiment_id, run_id))
+                return
+
             if parsed.path.startswith("/api/runs/"):
                 run_id = unquote(parsed.path.removeprefix("/api/runs/"))
                 experiment_id = self._resolve_experiment_id(parse_qs(parsed.query))
@@ -101,6 +110,7 @@ class _RunViewerHandler(SimpleHTTPRequestHandler):
                         schedules_dir=self.schedules_dir,
                         schedule_queue_path=self.schedule_queue_path,
                         times_csv_path=self.times_csv_path,
+                        runtime_stats_path=self.runtime_stats_path,
                     ),
                 )
                 return
@@ -113,6 +123,7 @@ class _RunViewerHandler(SimpleHTTPRequestHandler):
                         schedules_dir=self.schedules_dir,
                         schedule_queue_path=self.schedule_queue_path,
                         times_csv_path=self.times_csv_path,
+                        runtime_stats_path=self.runtime_stats_path,
                         schedule_id=schedule_id,
                     ),
                 )
@@ -133,6 +144,7 @@ class _RunViewerHandler(SimpleHTTPRequestHandler):
                     200,
                     preview_schedule_view(
                         times_csv_path=self.times_csv_path,
+                        runtime_stats_path=self.runtime_stats_path,
                         payload=self._read_json_body(),
                     ),
                 )
@@ -185,6 +197,7 @@ def launch_run_viewer(
     schedules_dir: Path = DEFAULT_SCHEDULES_DIR,
     schedule_queue_path: Path | None = DEFAULT_SCHEDULE_QUEUE_PATH,
     times_csv_path: Path = DEFAULT_TIMES_CSV_PATH,
+    runtime_stats_path: Path | None = DEFAULT_RUNTIME_STATS_PATH,
     experiment_id: str | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
@@ -205,6 +218,7 @@ def launch_run_viewer(
             schedules_dir=schedules_dir,
             schedule_queue_path=schedule_queue_path,
             times_csv_path=times_csv_path,
+            runtime_stats_path=runtime_stats_path,
             default_experiment_id=experiment_id,
         ),
     )
@@ -236,6 +250,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--schedules-dir", default=str(DEFAULT_SCHEDULES_DIR))
     parser.add_argument("--schedule-queue", default=str(DEFAULT_SCHEDULE_QUEUE_PATH))
     parser.add_argument("--times-csv", default=str(DEFAULT_TIMES_CSV_PATH))
+    parser.add_argument("--runtime-stats", default=str(DEFAULT_RUNTIME_STATS_PATH))
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-open", action="store_true", help="Print the URL without opening a browser")
@@ -249,6 +264,7 @@ def main(argv: list[str] | None = None) -> int:
         schedules_dir=Path(args.schedules_dir).resolve(),
         schedule_queue_path=Path(args.schedule_queue).resolve() if args.schedule_queue else None,
         times_csv_path=Path(args.times_csv).resolve(),
+        runtime_stats_path=Path(args.runtime_stats).resolve() if args.runtime_stats else None,
         experiment_id=args.experiment,
         host=args.host,
         port=args.port,

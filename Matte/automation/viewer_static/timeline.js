@@ -273,25 +273,90 @@
         return Number(right.duration_s || 0) - Number(left.duration_s || 0);
       });
 
-    const rowEnds = [];
-    const laidOutJobs = jobs.map((segment) => {
+    const knownCoreKeys = Array.from(new Set(jobs.map(coreTrackKey).filter(Boolean))).sort(compareCoreTrackKeys);
+    const coreRows = new Map(knownCoreKeys.map((key, index) => [key, index]));
+    const rowEnds = knownCoreKeys.map(() => Number.NEGATIVE_INFINITY);
+    const overflowRows = new Map();
+    const laidOutJobs = [];
+    jobs.filter((segment) => coreTrackKey(segment)).forEach((segment) => {
+      const rowIndex = placeKnownCoreSegment(segment, coreRows, overflowRows, rowEnds);
+      laidOutJobs.push({ segment, rowIndex });
+    });
+
+    const unknownRowOffset = rowEnds.length;
+    const unknownRowEnds = [];
+    jobs.filter((segment) => !coreTrackKey(segment)).forEach((segment) => {
       const start = Number(segment.start_s || 0);
       const end = Number(segment.end_s || start);
-      let rowIndex = rowEnds.findIndex((rowEnd) => start >= rowEnd);
+      let rowIndex = unknownRowEnds.findIndex((rowEnd) => start >= rowEnd);
       if (rowIndex === -1) {
-        rowIndex = rowEnds.length;
-        rowEnds.push(end);
+        rowIndex = unknownRowEnds.length;
+        unknownRowEnds.push(end);
       } else {
-        rowEnds[rowIndex] = end;
+        unknownRowEnds[rowIndex] = end;
       }
-      return { segment, rowIndex };
+      laidOutJobs.push({ segment, rowIndex: unknownRowOffset + rowIndex });
     });
 
     return {
       jobs: laidOutJobs,
       memcached,
-      rowCount: Math.max(rowEnds.length, 1),
+      rowCount: Math.max(rowEnds.length + unknownRowEnds.length, 1),
     };
+  }
+
+  function coreTrackKey(segment) {
+    if (Array.isArray(segment.core_ids) && segment.core_ids.length) {
+      return segment.core_ids.map((coreId) => Number(coreId)).sort((left, right) => left - right).join(",");
+    }
+    const cores = text(segment.cores, "");
+    return cores && cores !== "n/a" ? cores : null;
+  }
+
+  function compareCoreTrackKeys(left, right) {
+    const leftBounds = coreTrackBounds(left);
+    const rightBounds = coreTrackBounds(right);
+    if (leftBounds.min !== rightBounds.min) {
+      return leftBounds.min - rightBounds.min;
+    }
+    if (leftBounds.max !== rightBounds.max) {
+      return leftBounds.max - rightBounds.max;
+    }
+    return left.localeCompare(right);
+  }
+
+  function coreTrackBounds(key) {
+    const values = String(key).match(/\d+/g) || [];
+    const numbers = values.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+    if (!numbers.length) {
+      return { min: Number.MAX_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER };
+    }
+    return {
+      min: Math.min(...numbers),
+      max: Math.max(...numbers),
+    };
+  }
+
+  function placeKnownCoreSegment(segment, coreRows, overflowRows, rowEnds) {
+    const key = coreTrackKey(segment);
+    const start = Number(segment.start_s || 0);
+    const end = Number(segment.end_s || start);
+    const preferredRow = coreRows.get(key);
+    if (preferredRow !== undefined && start >= rowEnds[preferredRow]) {
+      rowEnds[preferredRow] = end;
+      return preferredRow;
+    }
+
+    const rows = overflowRows.get(key) || [];
+    let rowIndex = rows.find((candidateRow) => start >= rowEnds[candidateRow]);
+    if (rowIndex === undefined) {
+      rowIndex = rowEnds.length;
+      rowEnds.push(Number.NEGATIVE_INFINITY);
+      rows.push(rowIndex);
+      overflowRows.set(key, rows);
+    }
+    rowEnds[rowIndex] = end;
+    return rowIndex;
   }
 
   function createSegment(segment, scaleMax, options = {}) {
@@ -350,7 +415,9 @@
 
       const cores = document.createElement("span");
       cores.className = "segment-cores";
-      cores.textContent = `${compactResourceLabel(segment)} | ${compactCoreLabel(segment.cores)}`;
+      cores.textContent = isTight
+        ? `${fmtSecondsCompact(segment.duration_s)} | ${compactResourceLabel(segment)} | ${compactCoreLabel(segment.cores)}`
+        : `${compactResourceLabel(segment)} | ${compactCoreLabel(segment.cores)}`;
       bar.appendChild(cores);
     } else {
       const name = document.createElement("span");

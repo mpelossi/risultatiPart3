@@ -8,6 +8,8 @@ const state = {
   previewRunIds: [],
   statusFilter: "all",
   searchText: "",
+  historySortMode: "newest",
+  policyNotices: new Map(),
   hasPrimedSelection: false,
   experimentsPayloadSignature: "",
   runsPayloadSignature: "",
@@ -24,6 +26,7 @@ const compareNote = document.getElementById("compare-note");
 const runDetailSection = document.getElementById("run-detail-section");
 const historyGrid = document.getElementById("history-grid");
 const historyCount = document.getElementById("history-count");
+const historySortButton = document.getElementById("history-sort-button");
 const refreshButton = document.getElementById("refresh-button");
 const clearSelectionButton = document.getElementById("clear-selection-button");
 const statCardTemplate = document.getElementById("stat-card-template");
@@ -72,6 +75,8 @@ const CLASSES = {
   compareButton: "border-amber-500/45 bg-amber-100/85 text-amber-950 hover:bg-amber-200/90",
   neutralButton: "border-slate-900/15 bg-white/80 text-[var(--page-ink)] hover:bg-white",
   selectedButton: "selected border-emerald-800 bg-emerald-700 text-white shadow-[0_0_0_3px_var(--selected-ring)] hover:bg-emerald-800",
+  policyNotice: "policy-notice mt-3 rounded-[14px] bg-slate-100/80 px-3 py-2.5 text-[var(--page-ink)]",
+  policyNoticeError: "policy-notice mt-3 rounded-[14px] bg-[rgba(196,77,43,0.08)] px-3 py-2.5 text-[var(--accent-deep)]",
   finePrint: "mt-3 text-[0.84rem] text-[var(--muted)]",
 };
 
@@ -98,6 +103,7 @@ const JOB_SHORT_LABELS = {
 };
 
 const BENCHMARK_NODE_IDS = ["node-a-8core", "node-b-4core"];
+const policyResultCache = new Map();
 
 function fmtSeconds(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -211,6 +217,185 @@ function cx(...values) {
 
 function stableSignature(value) {
   return JSON.stringify(value);
+}
+
+function numericOrNull(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function runTimestampMs(run) {
+  const parsed = Date.parse(text(run.timestamp_iso, ""));
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+
+function compareRunsNewestFirst(left, right) {
+  const leftTimestamp = runTimestampMs(left);
+  const rightTimestamp = runTimestampMs(right);
+  if (leftTimestamp !== rightTimestamp) {
+    return rightTimestamp - leftTimestamp;
+  }
+  return text(right.run_id).localeCompare(text(left.run_id));
+}
+
+function compareRunsFastestFirst(left, right) {
+  const leftMakespan = numericOrNull(left.makespan_s);
+  const rightMakespan = numericOrNull(right.makespan_s);
+  if (leftMakespan !== null && rightMakespan !== null) {
+    const makespanDiff = leftMakespan - rightMakespan;
+    if (makespanDiff !== 0) {
+      return makespanDiff;
+    }
+    return compareRunsNewestFirst(left, right);
+  }
+  if (leftMakespan !== null) {
+    return -1;
+  }
+  if (rightMakespan !== null) {
+    return 1;
+  }
+  return compareRunsNewestFirst(left, right);
+}
+
+function sortedHistoryRuns(runs) {
+  const sorted = [...runs];
+  sorted.sort(state.historySortMode === "duration" ? compareRunsFastestFirst : compareRunsNewestFirst);
+  return sorted;
+}
+
+function historySortDescription() {
+  return state.historySortMode === "duration" ? "fastest first" : "newest first";
+}
+
+function policyCacheKey(runId) {
+  return `${state.experimentId || ""}:${runId}`;
+}
+
+function policyEndpoint(runId) {
+  return `/api/runs/${encodeURIComponent(runId)}/policy?experiment=${encodeURIComponent(state.experimentId || "")}`;
+}
+
+async function loadRunPolicy(run) {
+  const key = policyCacheKey(run.run_id);
+  if (policyResultCache.has(key)) {
+    return policyResultCache.get(key);
+  }
+  const payload = await fetchJson(policyEndpoint(run.run_id));
+  policyResultCache.set(key, payload);
+  return payload;
+}
+
+function policyMatchSummary(payload) {
+  if (payload.match_status === "matched") {
+    const labels = (payload.matches || []).map((match) => text(match.label || match.schedule_id)).join(", ");
+    return `already in schedules: ${labels || "matching file found"}`;
+  }
+  if (payload.match_status === "unmatched") {
+    return "not found in schedules";
+  }
+  if (payload.match_status === "missing_policy") {
+    return "policy.yaml is missing";
+  }
+  return "policy could not be checked";
+}
+
+function policyNotice(runId, message, options = {}) {
+  state.policyNotices.set(policyCacheKey(runId), {
+    message,
+    error: Boolean(options.error),
+  });
+  render();
+}
+
+function errorMessage(error) {
+  return error && error.message ? error.message : String(error);
+}
+
+function renderPolicyNotice(target, run) {
+  const notice = state.policyNotices.get(policyCacheKey(run.run_id));
+  if (!notice) {
+    return;
+  }
+  const element = document.createElement("div");
+  element.className = notice.error ? CLASSES.policyNoticeError : CLASSES.policyNotice;
+  element.textContent = notice.message;
+  target.appendChild(element);
+}
+
+function fallbackCopyText(value) {
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-1000px";
+  textarea.style.left = "-1000px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    if (!document.execCommand("copy")) {
+      throw new Error("copy command was rejected");
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+async function copyText(value) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch (error) {
+      // Fall through to the legacy path for browsers that block clipboard writes.
+    }
+  }
+  fallbackCopyText(value);
+}
+
+async function copyRunPolicy(run) {
+  policyNotice(run.run_id, "Copying policy.yaml...");
+  try {
+    const payload = await loadRunPolicy(run);
+    if (!payload.policy_yaml) {
+      throw new Error((payload.errors && payload.errors[0]) || "policy.yaml is unavailable");
+    }
+    await copyText(payload.policy_yaml);
+    policyNotice(run.run_id, `Copied policy.yaml; ${policyMatchSummary(payload)}.`);
+  } catch (error) {
+    policyNotice(run.run_id, `Could not copy policy.yaml: ${errorMessage(error)}`, { error: true });
+  }
+}
+
+async function checkRunPolicy(run) {
+  policyNotice(run.run_id, "Checking schedules for this policy...");
+  try {
+    const payload = await loadRunPolicy(run);
+    const errors = payload.errors && payload.errors.length ? ` (${payload.errors[0]})` : "";
+    policyNotice(run.run_id, `Policy ${policyMatchSummary(payload)}.${errors}`, {
+      error: payload.match_status === "parse_error" || payload.match_status === "missing_policy",
+    });
+  } catch (error) {
+    policyNotice(run.run_id, `Could not check policy.yaml: ${errorMessage(error)}`, { error: true });
+  }
+}
+
+function appendPolicyActions(actions, run) {
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.className = cardButtonClass({ variant: "neutral" });
+  copyButton.textContent = "Copy Policy";
+  copyButton.addEventListener("click", () => copyRunPolicy(run));
+  actions.appendChild(copyButton);
+
+  const checkButton = document.createElement("button");
+  checkButton.type = "button";
+  checkButton.className = cardButtonClass({ variant: "neutral" });
+  checkButton.textContent = "Check Policy";
+  checkButton.addEventListener("click", () => checkRunPolicy(run));
+  actions.appendChild(checkButton);
 }
 
 function rememberTimelineScrollPositions() {
@@ -370,7 +555,7 @@ async function loadRuns(options = {}) {
 
 function applyFilters() {
   const needle = state.searchText.trim().toLowerCase();
-  state.filteredRuns = state.runs.filter((run) => {
+  state.filteredRuns = sortedHistoryRuns(state.runs.filter((run) => {
     if (state.statusFilter !== "all" && text(run.overall_status, "unknown") !== state.statusFilter) {
       return false;
     }
@@ -383,7 +568,7 @@ function applyFilters() {
       text(run.policy_name),
     ].join(" ").toLowerCase();
     return haystack.includes(needle);
-  });
+  }));
 }
 
 function primeSelection() {
@@ -459,7 +644,13 @@ function render(options = {}) {
   renderCompare();
   renderHistory();
   selectionCount.textContent = `${state.selectedRunIds.length} / ${MAX_SELECTED_RUNS}`;
-  historyCount.textContent = `${state.filteredRuns.length} shown out of ${state.runs.length}`;
+  historyCount.textContent = `${state.filteredRuns.length} shown out of ${state.runs.length} · ${historySortDescription()}`;
+  historySortButton.textContent = state.historySortMode === "duration" ? "Fastest First" : "Newest First";
+  historySortButton.setAttribute("aria-pressed", state.historySortMode === "duration" ? "true" : "false");
+  historySortButton.className = cardButtonClass({
+    variant: state.historySortMode === "duration" ? "primary" : "neutral",
+    selected: state.historySortMode === "duration",
+  });
   afterLayoutSettles(() => {
     if (preserveTimelineScroll) {
       restoreTimelineScrollPositions();
@@ -645,8 +836,10 @@ function createRunSummaryBlock(run, options) {
     duoButton.addEventListener("click", () => toggleComparisonRun(run.run_id));
     actions.appendChild(duoButton);
   }
+  appendPolicyActions(actions, run);
 
   wrapper.appendChild(actions);
+  renderPolicyNotice(wrapper, run);
 
   if (options.includeTimeline) {
     wrapper.appendChild(createTimelineCard(run, options.scaleMax, { scrollKey: options.scrollKey }));
@@ -790,7 +983,9 @@ function renderCompare() {
     if (runs.length > 1 || index > 0) {
       actions.appendChild(removeButton);
     }
+    appendPolicyActions(actions, run);
     card.appendChild(actions);
+    renderPolicyNotice(card, run);
 
     compareGrid.appendChild(card);
   });
@@ -1000,25 +1195,90 @@ function layoutLaneSegments(segments) {
       return Number(right.duration_s || 0) - Number(left.duration_s || 0);
     });
 
-  const rowEnds = [];
-  const laidOutJobs = jobs.map((segment) => {
+  const knownCoreKeys = Array.from(new Set(jobs.map(coreTrackKey).filter(Boolean))).sort(compareCoreTrackKeys);
+  const coreRows = new Map(knownCoreKeys.map((key, index) => [key, index]));
+  const rowEnds = knownCoreKeys.map(() => Number.NEGATIVE_INFINITY);
+  const overflowRows = new Map();
+  const laidOutJobs = [];
+  jobs.filter((segment) => coreTrackKey(segment)).forEach((segment) => {
+    const rowIndex = placeKnownCoreSegment(segment, coreRows, overflowRows, rowEnds);
+    laidOutJobs.push({ segment, rowIndex });
+  });
+
+  const unknownRowOffset = rowEnds.length;
+  const unknownRowEnds = [];
+  jobs.filter((segment) => !coreTrackKey(segment)).forEach((segment) => {
     const start = Number(segment.start_s || 0);
     const end = Number(segment.end_s || start);
-    let rowIndex = rowEnds.findIndex((rowEnd) => start >= rowEnd);
+    let rowIndex = unknownRowEnds.findIndex((rowEnd) => start >= rowEnd);
     if (rowIndex === -1) {
-      rowIndex = rowEnds.length;
-      rowEnds.push(end);
+      rowIndex = unknownRowEnds.length;
+      unknownRowEnds.push(end);
     } else {
-      rowEnds[rowIndex] = end;
+      unknownRowEnds[rowIndex] = end;
     }
-    return { segment, rowIndex };
+    laidOutJobs.push({ segment, rowIndex: unknownRowOffset + rowIndex });
   });
 
   return {
     jobs: laidOutJobs,
     memcached,
-    rowCount: Math.max(rowEnds.length, 1),
+    rowCount: Math.max(rowEnds.length + unknownRowEnds.length, 1),
   };
+}
+
+function coreTrackKey(segment) {
+  if (Array.isArray(segment.core_ids) && segment.core_ids.length) {
+    return segment.core_ids.map((coreId) => Number(coreId)).sort((left, right) => left - right).join(",");
+  }
+  const cores = text(segment.cores, "");
+  return cores && cores !== "n/a" ? cores : null;
+}
+
+function compareCoreTrackKeys(left, right) {
+  const leftBounds = coreTrackBounds(left);
+  const rightBounds = coreTrackBounds(right);
+  if (leftBounds.min !== rightBounds.min) {
+    return leftBounds.min - rightBounds.min;
+  }
+  if (leftBounds.max !== rightBounds.max) {
+    return leftBounds.max - rightBounds.max;
+  }
+  return left.localeCompare(right);
+}
+
+function coreTrackBounds(key) {
+  const values = String(key).match(/\d+/g) || [];
+  const numbers = values.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (!numbers.length) {
+    return { min: Number.MAX_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER };
+  }
+  return {
+    min: Math.min(...numbers),
+    max: Math.max(...numbers),
+  };
+}
+
+function placeKnownCoreSegment(segment, coreRows, overflowRows, rowEnds) {
+  const key = coreTrackKey(segment);
+  const start = Number(segment.start_s || 0);
+  const end = Number(segment.end_s || start);
+  const preferredRow = coreRows.get(key);
+  if (preferredRow !== undefined && start >= rowEnds[preferredRow]) {
+    rowEnds[preferredRow] = end;
+    return preferredRow;
+  }
+
+  const rows = overflowRows.get(key) || [];
+  let rowIndex = rows.find((candidateRow) => start >= rowEnds[candidateRow]);
+  if (rowIndex === undefined) {
+    rowIndex = rowEnds.length;
+    rowEnds.push(Number.NEGATIVE_INFINITY);
+    rows.push(rowIndex);
+    overflowRows.set(key, rows);
+  }
+  rowEnds[rowIndex] = end;
+  return rowIndex;
 }
 
 function createSegment(segment, scaleMax, options = {}) {
@@ -1077,7 +1337,9 @@ function createSegment(segment, scaleMax, options = {}) {
 
     const cores = document.createElement("span");
     cores.className = "segment-cores";
-    cores.textContent = `${compactResourceLabel(segment)} | ${compactCoreLabel(segment.cores)}`;
+    cores.textContent = isTight
+      ? `${fmtSecondsCompact(segment.duration_s)} | ${compactResourceLabel(segment)} | ${compactCoreLabel(segment.cores)}`
+      : `${compactResourceLabel(segment)} | ${compactCoreLabel(segment.cores)}`;
     bar.appendChild(cores);
   } else {
     const name = document.createElement("span");
@@ -1255,8 +1517,10 @@ function renderHistory() {
       bestButton.addEventListener("click", () => compareWithBest(run.run_id));
       actions.appendChild(bestButton);
     }
+    appendPolicyActions(actions, run);
 
     card.appendChild(actions);
+    renderPolicyNotice(card, run);
 
     if (runHasTimelineData(run)) {
       const previewing = state.previewRunIds.includes(run.run_id);
@@ -1314,6 +1578,8 @@ experimentSelect.addEventListener("change", async (event) => {
   state.experimentId = event.target.value;
   state.selectedRunIds = [];
   state.previewRunIds = [];
+  state.policyNotices.clear();
+  policyResultCache.clear();
   state.hasPrimedSelection = false;
   state.runsPayloadSignature = "";
   await loadRuns();
@@ -1332,6 +1598,18 @@ searchInput.addEventListener("input", () => {
 });
 
 refreshButton.addEventListener("click", refreshAll);
+
+historySortButton.addEventListener("click", () => {
+  if (state.historySortMode === "duration") {
+    state.historySortMode = "newest";
+  } else {
+    state.historySortMode = "duration";
+    state.statusFilter = "all";
+    statusFilter.value = "all";
+  }
+  applyFilters();
+  render();
+});
 
 clearSelectionButton.addEventListener("click", () => {
   state.selectedRunIds = [];

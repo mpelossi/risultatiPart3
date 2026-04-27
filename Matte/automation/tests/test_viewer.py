@@ -8,7 +8,7 @@ from pathlib import Path
 from Matte.automation.catalog import JOB_CATALOG, NODE_A, NODE_B
 from Matte.automation.metrics import build_summary
 from Matte.automation.tests.helpers import temp_workspace, write_json_config
-from Matte.automation.viewer_data import list_run_experiments, load_experiment_view, load_run_view
+from Matte.automation.viewer_data import list_run_experiments, load_experiment_view, load_run_policy_view, load_run_view
 
 
 BASE_TIME = datetime(2026, 4, 23, 3, 0, 0, tzinfo=timezone.utc)
@@ -442,6 +442,74 @@ class ViewerDataTests(unittest.TestCase):
 
             self.assertEqual(view["best_run_id"], "20260423t023159z")
             self.assertEqual(view["runs"][0]["run_id"], "2026-04-23-16h42m02s")
+
+    def test_load_run_policy_view_reports_parsed_exact_schedule_match(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            experiment_root = root / "runs" / "demo"
+            schedules_dir = root / "schedules"
+            schedules_dir.mkdir()
+            run_dir = _write_run(
+                experiment_root,
+                "2026-04-23-16h42m02s",
+                policy_name="summary-backed",
+                snapshot_filename=None,
+            )
+            (schedules_dir / "matching.yaml").write_text(
+                "# same policy with different formatting comments\n"
+                + (run_dir / "policy.yaml").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            payload = load_run_policy_view(root / "runs", schedules_dir, "demo", "2026-04-23-16h42m02s")
+
+            self.assertEqual(payload["match_status"], "matched")
+            self.assertEqual(payload["matches"], [
+                {
+                    "schedule_id": "matching.yaml",
+                    "label": "matching.yaml",
+                    "path": str((schedules_dir / "matching.yaml").resolve()),
+                }
+            ])
+            self.assertIn("summary-backed", payload["policy_yaml"])
+
+    def test_load_run_policy_view_reports_unmatched_policy(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            experiment_root = root / "runs" / "demo"
+            schedules_dir = root / "schedules"
+            schedules_dir.mkdir()
+            _write_run(
+                experiment_root,
+                "2026-04-23-16h42m02s",
+                policy_name="summary-backed",
+                snapshot_filename=None,
+            )
+            write_json_config(schedules_dir / "different.yaml", _policy_payload("different-policy"))
+
+            payload = load_run_policy_view(root / "runs", schedules_dir, "demo", "2026-04-23-16h42m02s")
+
+            self.assertEqual(payload["match_status"], "unmatched")
+            self.assertEqual(payload["matches"], [])
+
+    def test_load_run_policy_view_reports_missing_or_malformed_policy(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            schedules_dir = root / "schedules"
+            schedules_dir.mkdir()
+            missing_run = root / "runs" / "demo" / "missing-policy"
+            missing_run.mkdir(parents=True)
+            malformed_run = root / "runs" / "demo" / "bad-policy"
+            malformed_run.mkdir(parents=True)
+            (malformed_run / "policy.yaml").write_text("policy_name: [unterminated\n", encoding="utf-8")
+
+            missing = load_run_policy_view(root / "runs", schedules_dir, "demo", "missing-policy")
+            malformed = load_run_policy_view(root / "runs", schedules_dir, "demo", "bad-policy")
+
+            self.assertEqual(missing["match_status"], "missing_policy")
+            self.assertTrue(missing["errors"])
+            self.assertEqual(malformed["match_status"], "parse_error")
+            self.assertTrue(malformed["errors"])
 
 
 class ViewerExperimentListingTests(unittest.TestCase):
