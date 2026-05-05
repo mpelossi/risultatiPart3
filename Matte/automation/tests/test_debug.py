@@ -345,6 +345,39 @@ class FailureSurfaceTests(unittest.TestCase):
         runner_cls.return_value.run_once.assert_called_once_with(dry_run=False, precache=True)
         self.assertEqual(output.getvalue().strip(), "/tmp/run")
 
+    def test_run_cli_precache_dispatches_to_precache_once(self) -> None:
+        experiment = _experiment_config()
+        policy = PolicyConfig(
+            config_path=Path("/tmp/policy.yaml"),
+            policy_name="test-policy",
+            memcached=MemcachedConfig(node="node-b-4core", cores="0", threads=1),
+            job_overrides={},
+            phases=[],
+        )
+        output = io.StringIO()
+
+        with patch("Matte.automation.cli.load_experiment_config", return_value=experiment), patch(
+            "Matte.automation.cli.load_policy_config",
+            return_value=policy,
+        ), patch("Matte.automation.cli.ExperimentRunner") as runner_cls:
+            runner_cls.return_value.precache_once.return_value = Path("/tmp/precache")
+            with redirect_stdout(output):
+                cli.main(
+                    [
+                        "run",
+                        "precache",
+                        "--config",
+                        "experiment.yaml",
+                        "--policy",
+                        "policy.yaml",
+                    ]
+                )
+
+        runner_cls.return_value.precache_once.assert_called_once_with()
+        runner_cls.return_value.run_once.assert_not_called()
+        runner_cls.return_value.run_batch.assert_not_called()
+        self.assertEqual(output.getvalue().strip(), "/tmp/precache")
+
 
 class BootstrapScriptTests(unittest.TestCase):
     def test_all_client_bootstrap_scripts_share_the_new_dependency_helper(self) -> None:

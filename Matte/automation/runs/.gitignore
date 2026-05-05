@@ -1,0 +1,9 @@
+.venv
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd          
+# runs/
+part3-handcrafted/
+.codex

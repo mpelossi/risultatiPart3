@@ -88,6 +88,9 @@ def _build_parser() -> argparse.ArgumentParser:
     run_once.add_argument("--policy", required=True)
     run_once.add_argument("--dry-run", action="store_true")
     run_once.add_argument("--precache", action="store_true")
+    run_precache = run_sub.add_parser("precache")
+    run_precache.add_argument("--config", required=True)
+    run_precache.add_argument("--policy", required=True)
     run_batch = run_sub.add_parser("batch")
     run_batch.add_argument("--config", required=True)
     run_batch.add_argument("--policy", required=True)
@@ -204,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run":
-        if args.dry_run and args.precache:
+        if getattr(args, "dry_run", False) and getattr(args, "precache", False):
             parser.error("--precache cannot be combined with --dry-run")
         experiment = load_experiment_config(args.config)
         if args.run_command == "queue":
@@ -217,6 +220,9 @@ def main(argv: list[str] | None = None) -> int:
         runner = ExperimentRunner(experiment, policy)
         if args.run_command == "once":
             run_dir = runner.run_once(dry_run=args.dry_run, precache=args.precache)
+            print(run_dir)
+        elif args.run_command == "precache":
+            run_dir = runner.precache_once()
             print(run_dir)
         else:
             run_dirs = runner.run_batch(args.runs, dry_run=args.dry_run, precache=args.precache)

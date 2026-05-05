@@ -1,0 +1,123 @@
+{
+  "completed_job_count": 7,
+  "expected_job_count": 7,
+  "experiment_id": "part3-OPENEVOLVE",
+  "jobs": {
+    "barnes": {
+      "finished_at": "2026-05-05T16:06:15Z",
+      "node_name": "node-a-8core-v3hf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.96",
+      "pod_name": "parsec-barnes-2026-05-05-18h04m00s-5ts9f",
+      "runtime_s": 56.0,
+      "started_at": "2026-05-05T16:05:19Z",
+      "status": "completed"
+    },
+    "blackscholes": {
+      "finished_at": "2026-05-05T16:08:05Z",
+      "node_name": "node-b-4core-tjvr",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.64",
+      "pod_name": "parsec-blackscholes-2026-05-05-18h04m00s-lt4gf",
+      "runtime_s": 45.0,
+      "started_at": "2026-05-05T16:07:20Z",
+      "status": "completed"
+    },
+    "canneal": {
+      "finished_at": "2026-05-05T16:07:15Z",
+      "node_name": "node-b-4core-tjvr",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.6.63",
+      "pod_name": "parsec-canneal-2026-05-05-18h04m00s-tv7rq",
+      "runtime_s": 116.0,
+      "started_at": "2026-05-05T16:05:19Z",
+      "status": "completed"
+    },
+    "freqmine": {
+      "finished_at": "2026-05-05T16:08:17Z",
+      "node_name": "node-a-8core-v3hf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.98",
+      "pod_name": "parsec-freqmine-2026-05-05-18h04m00s-t9cj6",
+      "runtime_s": 117.0,
+      "started_at": "2026-05-05T16:06:20Z",
+      "status": "completed"
+    },
+    "radix": {
+      "finished_at": "2026-05-05T16:08:53Z",
+      "node_name": "node-a-8core-v3hf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.100",
+      "pod_name": "parsec-radix-2026-05-05-18h04m00s-fhff9",
+      "runtime_s": 11.0,
+      "started_at": "2026-05-05T16:08:42Z",
+      "status": "completed"
+    },
+    "streamcluster": {
+      "finished_at": "2026-05-05T16:08:06Z",
+      "node_name": "node-a-8core-v3hf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.97",
+      "pod_name": "parsec-streamcluster-2026-05-05-18h04m00s-bbhnf",
+      "runtime_s": 166.0,
+      "started_at": "2026-05-05T16:05:20Z",
+      "status": "completed"
+    },
+    "vips": {
+      "finished_at": "2026-05-05T16:08:32Z",
+      "node_name": "node-a-8core-v3hf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.99",
+      "pod_name": "parsec-vips-2026-05-05-18h04m00s-c5b9m",
+      "runtime_s": 21.0,
+      "started_at": "2026-05-05T16:08:11Z",
+      "status": "completed"
+    }
+  },
+  "makespan_s": 214.0,
+  "max_observed_p95_us": 396.0,
+  "measurement_status": "ok",
+  "memcached": {
+    "node_name": "node-b-4core-tjvr",
+    "phase": "Running",
+    "pod_ip": "100.96.6.62",
+    "pod_name": "memcached-server-2026-05-05-18h04m00s"
+  },
+  "node_platforms": {
+    "capture_status": "ok",
+    "errors": [],
+    "nodes": {
+      "node-a-8core": {
+        "capture_status": "ok",
+        "cpu_platform": "AMD Rome",
+        "gcp_name": "node-a-8core-v3hf",
+        "gcp_status": "RUNNING",
+        "machine_type": "e2-standard-8",
+        "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/e2-standard-8",
+        "node_name": "node-a-8core-v3hf",
+        "node_type": "node-a-8core",
+        "zone": "europe-west1-b",
+        "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+      },
+      "node-b-4core": {
+        "capture_status": "ok",
+        "cpu_platform": "AMD Milan",
+        "gcp_name": "node-b-4core-tjvr",
+        "gcp_status": "RUNNING",
+        "machine_type": "n2d-highcpu-4",
+        "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/n2d-highcpu-4",
+        "node_name": "node-b-4core-tjvr",
+        "node_type": "node-b-4core",
+        "zone": "europe-west1-b",
+        "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+      }
+    },
+    "zone": "europe-west1-b"
+  },
+  "overall_status": "pass",
+  "policy_name": "overlap-radix-vips",
+  "run_id": "2026-05-05-18h04m00s",
+  "sample_count": 21,
+  "slo_violations": 0,
+  "timing_complete": true
+}

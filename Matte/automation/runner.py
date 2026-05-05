@@ -71,6 +71,20 @@ class ExperimentRunner:
         manifests_dir = ensure_directory(run_dir / "rendered_manifests")
         return run_id, run_dir, manifests_dir
 
+    def _create_precache_dir(self) -> tuple[str, Path, Path]:
+        precache_root = ensure_directory(self.experiment.results_root / "__precache" / self.experiment.experiment_id)
+        base_run_id = run_id_timestamp()
+        run_id = base_run_id
+        suffix = 2
+        precache_dir = precache_root / run_id
+        while precache_dir.exists():
+            run_id = f"{base_run_id}-{suffix:02d}"
+            precache_dir = precache_root / run_id
+            suffix += 1
+        precache_dir = ensure_directory(precache_dir)
+        manifests_dir = ensure_directory(precache_dir / "rendered_manifests")
+        return run_id, precache_dir, manifests_dir
+
     def _log(self, log_path: Path, message: str) -> None:
         append_log(log_path, message)
         print(message)
@@ -81,6 +95,39 @@ class ExperimentRunner:
     def _write_policy_snapshot(self, run_dir: Path) -> None:
         shutil.copyfile(self.experiment.config_path, run_dir / "experiment.yaml")
         shutil.copyfile(self.policy.config_path, run_dir / "policy.yaml")
+
+    def _prepare_live_cluster(self, *, log_path: Path, run_id: str) -> None:
+        self._log(log_path, "Cleaning previous managed workloads")
+        self.cluster.cleanup_managed_workloads()
+        self._log(log_path, "Ensuring canonical node labels and checking client provisioning")
+        try:
+            assert_client_provisioning(self.cluster)
+        except ProvisioningError as exc:
+            for status in exc.statuses.values():
+                self._log(log_path, str(status))
+            for hint in summarize_provisioning_hints(exc.statuses):
+                self._log(log_path, f"Hint: {hint}")
+            self._log(
+                log_path,
+                "Debug commands: "
+                + format_debug_command_hint(
+                    config_path=self.experiment.config_path,
+                    policy_path=self.policy.config_path,
+                    run_id=run_id,
+                ),
+            )
+            raise
+        except RuntimeError:
+            self._log(
+                log_path,
+                "Debug commands: "
+                + format_debug_command_hint(
+                    config_path=self.experiment.config_path,
+                    policy_path=self.policy.config_path,
+                    run_id=run_id,
+                ),
+            )
+            raise
 
     def _render_manifests(
         self,
@@ -792,37 +839,7 @@ class ExperimentRunner:
             self._log(log_path, f"Dry run prepared at {run_dir}")
             return run_dir
 
-        self._log(log_path, "Cleaning previous managed workloads")
-        self.cluster.cleanup_managed_workloads()
-        self._log(log_path, "Ensuring canonical node labels and checking client provisioning")
-        try:
-            assert_client_provisioning(self.cluster)
-        except ProvisioningError as exc:
-            for status in exc.statuses.values():
-                self._log(log_path, str(status))
-            for hint in summarize_provisioning_hints(exc.statuses):
-                self._log(log_path, f"Hint: {hint}")
-            self._log(
-                log_path,
-                "Debug commands: "
-                + format_debug_command_hint(
-                    config_path=self.experiment.config_path,
-                    policy_path=self.policy.config_path,
-                    run_id=run_id,
-                ),
-            )
-            raise
-        except RuntimeError:
-            self._log(
-                log_path,
-                "Debug commands: "
-                + format_debug_command_hint(
-                    config_path=self.experiment.config_path,
-                    policy_path=self.policy.config_path,
-                    run_id=run_id,
-                ),
-            )
-            raise
+        self._prepare_live_cluster(log_path=log_path, run_id=run_id)
 
         if precache:
             self._precache_images(run_id=run_id, manifests_dir=manifests_dir, log_path=log_path)
@@ -898,6 +915,41 @@ class ExperimentRunner:
         )
         self._refresh_runtime_stats(log_path=log_path)
         return run_dir
+
+    def precache_once(self) -> Path:
+        run_id, precache_dir, manifests_dir = self._create_precache_dir()
+        log_path = precache_dir / "events.log"
+        precache_pods = resolve_precache_pods(run_id)
+        pod_names = [pod.kubernetes_name for pod in precache_pods]
+        image_count = len(precache_pods[0].images) if precache_pods else 0
+        status: dict[str, object] = {
+            "experiment_id": self.experiment.experiment_id,
+            "image_count": image_count,
+            "pod_names": pod_names,
+            "policy_name": self.policy.policy_name,
+            "run_id": run_id,
+            "status": "running",
+        }
+
+        self._log_run_prefix(run_id, f"Preparing pre-cache in {precache_dir}")
+        self._write_policy_snapshot(precache_dir)
+        write_json(precache_dir / "precache.json", status)
+        self._log(log_path, f"Pre-cache directory prepared: {precache_dir}")
+
+        try:
+            self._prepare_live_cluster(log_path=log_path, run_id=run_id)
+            self._precache_images(run_id=run_id, manifests_dir=manifests_dir, log_path=log_path)
+        except Exception as exc:
+            status["status"] = "failed"
+            status["error"] = str(exc)
+            write_json(precache_dir / "precache.json", status)
+            self._log(log_path, f"Pre-cache only run failed: {exc}")
+            raise
+
+        status["status"] = "success"
+        write_json(precache_dir / "precache.json", status)
+        self._log(log_path, "Pre-cache only run completed successfully")
+        return precache_dir
 
     def run_batch(self, runs: int, *, dry_run: bool = False, precache: bool = False) -> list[Path]:
         if dry_run and precache:

@@ -646,6 +646,10 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
         ):
             return runner.run_once(precache=precache)
 
+    def _precache_once(self, runner: ExperimentRunner) -> Path:
+        with patch("Matte.automation.runner.assert_client_provisioning"):
+            return runner.precache_once()
+
     def test_later_phase_can_launch_before_earlier_blocked_phase(self) -> None:
         with temp_workspace() as workspace:
             root = Path(workspace)
@@ -861,6 +865,61 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
             self.assertIsNone(cluster.memcached_name)
             self.assertEqual(cluster.applied_job_ids, [])
             self.assertTrue(cluster.precache_deleted_selectors)
+
+    def test_precache_once_applies_only_precache_pods(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+
+            precache_dir = self._precache_once(runner)
+
+            self.assertEqual(precache_dir.parent.parent.name, "__precache")
+            self.assertFalse((root / "runs" / "demo").exists())
+            self.assertEqual(len(cluster.precache_wait_calls), 1)
+            self.assertTrue(cluster.precache_deleted_selectors)
+            self.assertEqual(cluster.precache_pod_names, set())
+            self.assertIsNone(cluster.memcached_name)
+            self.assertEqual(cluster.applied_job_ids, [])
+
+            manifest_names = sorted(path.name for path in (precache_dir / "rendered_manifests").glob("*.yaml"))
+            self.assertTrue(manifest_names)
+            self.assertTrue(all(name.startswith("precache-") for name in manifest_names))
+            self.assertNotIn("memcached.yaml", manifest_names)
+            self.assertNotIn("blackscholes.yaml", manifest_names)
+
+            status = json.loads((precache_dir / "precache.json").read_text(encoding="utf-8"))
+            self.assertEqual(status["status"], "success")
+            self.assertEqual(status["run_id"], precache_dir.name)
+            self.assertGreater(status["image_count"], 0)
+            self.assertEqual(len(status["pod_names"]), 2)
+
+    def test_precache_once_failure_cleans_up_and_records_status(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+            cluster.precache_wait_error = RuntimeError("Image pull failed for pod/precache")
+
+            with self.assertRaisesRegex(RuntimeError, "Image pull failed"):
+                self._precache_once(runner)
+
+            self.assertIsNone(cluster.memcached_name)
+            self.assertEqual(cluster.applied_job_ids, [])
+            self.assertTrue(cluster.precache_deleted_selectors)
+            self.assertEqual(cluster.precache_pod_names, set())
+
+            precache_root = root / "runs" / "__precache" / "demo"
+            [precache_dir] = list(precache_root.iterdir())
+            status = json.loads((precache_dir / "precache.json").read_text(encoding="utf-8"))
+            self.assertEqual(status["status"], "failed")
+            self.assertIn("Image pull failed", status["error"])
 
     def test_run_batch_precaches_only_before_first_run(self) -> None:
         with temp_workspace() as workspace:

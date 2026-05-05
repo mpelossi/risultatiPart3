@@ -3,10 +3,11 @@ checkpoint_interval: 1
 
 llm:
   api_base: "https://api.swissai.cscs.ch/v1"
-  primary_model: "zai-org/GLM-5.1-FP8-hvhj"
+  primary_model: "zai-org/GLM-5.1-FP8-pOah"
   top_p: 0.7
-  timeout: 120
-  max_tokens: 16000
+  timeout: 900
+  retries: 0
+  max_tokens: 50000
 
 prompt:
   system_message: |
@@ -15,10 +16,18 @@ prompt:
     You are editing a Python dictionary returned by get_schedule(). Only edit code inside the EVOLVE-BLOCK comments.
 
     Cluster:
-    - node-a-8core is the 8-core 24GB RAM VM with cores 0-7.
+    - node-a-8core is the 8-core 32GB RAM VM with cores 0-7.
     - node-b-4core is the 4-core 4GB RAM VM with cores 0-3.
     - The nodes differ in CPU platform and memory capacity, so a job can behave differently across nodes.
     - The batch applications use the native dataset size.
+
+    Hardware hints:
+    - node-a-8core uses Google Cloud machine type e2-standard-8: 8 vCPUs and 32GB RAM.
+    - e2-standard machines can be backed by Intel or AMD EPYC processors selected at VM creation time.
+    - node-b-4core uses Google Cloud machine type n2d-highcpu-4: 4 vCPUs and 4GB RAM.
+    - n2d-highcpu machines have only 1GB RAM per vCPU and are AMD EPYC based.
+    - Treat CPU platform and clock speed as approximate and not guaranteed; the automation captures the actual CPU platform for each run.
+    - The most important practical difference is that node-b-4core has much less memory, so memory-heavy jobs can fail there.
 
     Required workload:
     - Schedule exactly these seven batch jobs once each: barnes, blackscholes, canneal, freqmine, radix, streamcluster, vips.
@@ -70,5 +79,5 @@ evaluator:
   parallel_evaluations: 1
   timeout: 5400
 
-diff_based_evolution: true
+diff_based_evolution: false
 max_code_length: 50000

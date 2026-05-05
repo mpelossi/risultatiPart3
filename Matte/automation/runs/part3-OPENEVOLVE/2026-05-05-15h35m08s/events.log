@@ -1,0 +1,14 @@
+2026-05-05T13:35:08.228975+00:00 Run directory prepared: /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/part3-handcrafted/2026-05-05-15h35m08s
+2026-05-05T13:35:08.229012+00:00 Rendered 8 manifests into /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/part3-handcrafted/2026-05-05-15h35m08s/rendered_manifests
+2026-05-05T13:35:08.229022+00:00 Cleaning previous managed workloads
+2026-05-05T13:35:40.406528+00:00 Ensuring canonical node labels and checking client provisioning
+2026-05-05T13:35:51.244914+00:00 Applying memcached manifest
+2026-05-05T13:35:53.957688+00:00 Capturing benchmark node CPU platforms
+2026-05-05T13:35:56.481847+00:00 Benchmark node CPU platform capture complete: node-a-8core=e2-standard-8/AMD Rome, node-b-4core=n2d-highcpu-4/AMD Milan
+2026-05-05T13:35:56.482507+00:00 Restarting mcperf-agent.service on client-agent-a (client-agent-a-7cmp)
+2026-05-05T13:36:00.943263+00:00 mcperf-agent.service active on client-agent-a (client-agent-a-7cmp)
+2026-05-05T13:36:00.943385+00:00 Restarting mcperf-agent.service on client-agent-b (client-agent-b-67sh)
+2026-05-05T13:36:05.269871+00:00 mcperf-agent.service active on client-agent-b (client-agent-b-67sh)
+2026-05-05T13:36:05.270005+00:00 Starting measurement against memcached IP 100.96.6.19
+2026-05-05T13:36:05.531690+00:00 Waiting for first mcperf measurement sample
+2026-05-05T13:36:13.939675+00:00 mcperf measurement header observed

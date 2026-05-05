@@ -1,0 +1,181 @@
+2026-05-05 18:21:40,265 - openevolve.controller - INFO - Logging to run_20260505_154001/logs/openevolve_20260505_182140.log
+2026-05-05 18:21:40,270 - openevolve.controller - INFO - Set random seed to 42 for reproducibility
+2026-05-05 18:21:40,301 - openevolve.llm.openai - INFO - Initialized OpenAI LLM with model: moonshotai/Kimi-K2.5
+2026-05-05 18:21:40,301 - openevolve.llm.ensemble - INFO - Initialized LLM ensemble with models: moonshotai/Kimi-K2.5 (weight: 1.00)
+2026-05-05 18:21:40,313 - openevolve.prompt.sampler - INFO - Initialized prompt sampler
+2026-05-05 18:21:40,314 - openevolve.prompt.sampler - INFO - Set custom templates: system=evaluator_system_message, user=None
+2026-05-05 18:21:40,314 - openevolve.database - INFO - Initialized program database with 0 programs
+2026-05-05 18:21:40,315 - openevolve.evaluator - INFO - Successfully loaded evaluation function from evaluator.py
+2026-05-05 18:21:40,315 - openevolve.evaluator - INFO - Initialized evaluator with evaluator.py
+2026-05-05 18:21:40,315 - openevolve.controller - INFO - Initialized OpenEvolve with initial_program.py
+2026-05-05 18:21:40,315 - openevolve.database - INFO - Loaded database metadata with last_iteration=12
+2026-05-05 18:21:40,315 - openevolve.database - INFO - Loaded feature_stats for 2 dimensions
+2026-05-05 18:21:40,317 - openevolve.database - INFO - Reconstructed islands: restored 9 programs to islands
+2026-05-05 18:21:40,317 - openevolve.database - INFO - Loaded database with 13 programs from run_20260505_154001/checkpoints/checkpoint_12
+2026-05-05 18:21:40,317 - openevolve.database - INFO - Island Status:
+2026-05-05 18:21:40,318 - openevolve.database - INFO -  * Island 0: 9 programs, best=9801.0000, avg=9770.6667, diversity=100.20, gen=12 (best: 1c76e84d-dd16-491a-817a-81a802dd3dae)
+2026-05-05 18:21:40,318 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,318 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,318 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,318 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,318 - openevolve.controller - INFO - Loading checkpoint from run_20260505_154001/checkpoints/checkpoint_12
+2026-05-05 18:21:40,318 - openevolve.database - INFO - Loaded database metadata with last_iteration=12
+2026-05-05 18:21:40,318 - openevolve.database - INFO - Loaded feature_stats for 2 dimensions
+2026-05-05 18:21:40,320 - openevolve.database - INFO - Reconstructed islands: restored 9 programs to islands
+2026-05-05 18:21:40,320 - openevolve.database - INFO - Loaded database with 13 programs from run_20260505_154001/checkpoints/checkpoint_12
+2026-05-05 18:21:40,321 - openevolve.database - INFO - Island Status:
+2026-05-05 18:21:40,321 - openevolve.database - INFO -  * Island 0: 9 programs, best=9801.0000, avg=9770.6667, diversity=100.20, gen=12 (best: 1c76e84d-dd16-491a-817a-81a802dd3dae)
+2026-05-05 18:21:40,321 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,321 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,321 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,321 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,321 - openevolve.controller - INFO - Checkpoint loaded successfully (iteration 12)
+2026-05-05 18:21:40,321 - openevolve.controller - INFO - Resuming from checkpoint at iteration 13
+2026-05-05 18:21:40,321 - openevolve.controller - INFO - Skipping initial program addition (resuming from iteration 13 with 13 existing programs)
+2026-05-05 18:21:40,323 - openevolve.process_parallel - INFO - Initialized process parallel controller with 1 workers
+2026-05-05 18:21:40,323 - openevolve.process_parallel - INFO - Set max None tasks per child
+2026-05-05 18:21:40,323 - openevolve.process_parallel - INFO - Started process pool with 1 processes
+2026-05-05 18:21:40,323 - openevolve.controller - INFO - Using island-based evolution with 5 islands
+2026-05-05 18:21:40,324 - openevolve.database - INFO - Island Status:
+2026-05-05 18:21:40,324 - openevolve.database - INFO -  * Island 0: 9 programs, best=9801.0000, avg=9770.6667, diversity=100.20, gen=12 (best: 1c76e84d-dd16-491a-817a-81a802dd3dae)
+2026-05-05 18:21:40,324 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,324 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,324 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,324 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:21:40,324 - openevolve.process_parallel - INFO - Starting process-based evolution from iteration 13 for 8 iterations (total: 21)
+2026-05-05 18:21:40,334 - openevolve.process_parallel - INFO - Early stopping disabled
+2026-05-05 18:21:40,369 - openevolve.prompt.sampler - INFO - Set custom templates: system=evaluator_system_message, user=None
+2026-05-05 18:21:40,370 - openevolve.evaluator - INFO - Successfully loaded evaluation function from evaluator.py
+2026-05-05 18:21:40,370 - openevolve.evaluator - INFO - Initialized evaluator with evaluator.py
+2026-05-05 18:21:40,373 - openevolve.llm.ensemble - INFO - Sampled model: moonshotai/Kimi-K2.5
+2026-05-05 18:25:05,196 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 18:30:10,999 - openevolve.evaluator - INFO - Evaluated program c458e9b1-ff29-4646-93ef-5e672b1afc3d in 305.80s: combined_score=9790.0000, makespan_s=210.0000, max_p95_us=399.7000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:30:11,003 - openevolve.llm.ensemble - INFO - Sampled model: moonshotai/Kimi-K2.5
+2026-05-05 18:30:11,007 - openevolve.process_parallel - INFO - Iteration 13: Program c458e9b1-ff29-4646-93ef-5e672b1afc3d (parent: afb53104-7126-4fb9-b727-56452513321b) completed in 510.63s
+2026-05-05 18:30:11,007 - openevolve.process_parallel - INFO - Metrics: combined_score=9790.0000, makespan_s=210.0000, max_p95_us=399.7000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:30:11,007 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 13
+2026-05-05 18:30:11,008 - openevolve.database - INFO - Island Status:
+2026-05-05 18:30:11,008 - openevolve.database - INFO -  * Island 0: 10 programs, best=9801.0000, avg=9772.6000, diversity=100.20, gen=13 (best: 1c76e84d-dd16-491a-817a-81a802dd3dae)
+2026-05-05 18:30:11,008 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:30:11,008 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:30:11,008 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:30:11,008 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:30:11,012 - openevolve.database - INFO - Saved database with 14 programs to run_20260505_154001/checkpoints/checkpoint_13
+2026-05-05 18:30:11,012 - openevolve.controller - INFO - Saved best program at checkpoint 13 with metrics: combined_score=9801.0000, makespan_s=199.0000, max_p95_us=515.7000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:30:11,012 - openevolve.controller - INFO - Saved checkpoint at iteration 13 to run_20260505_154001/checkpoints/checkpoint_13
+2026-05-05 18:31:30,334 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 18:36:38,947 - openevolve.evaluator - INFO - Evaluated program 86b89acd-c366-43c4-8fa5-061f5c187143 in 308.61s: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:36:38,951 - openevolve.llm.ensemble - INFO - Sampled model: moonshotai/Kimi-K2.5
+2026-05-05 18:36:38,955 - openevolve.database - INFO - Island 0 MAP-Elites cell improved: {'complexity': 9, 'diversity': 0} (fitness: 9801.000 -> 9802.000)
+2026-05-05 18:36:38,955 - openevolve.database - INFO - New best program 86b89acd-c366-43c4-8fa5-061f5c187143 replaces 1c76e84d-dd16-491a-817a-81a802dd3dae (combined_score: 9801.0000 → 9802.0000, +1.0000)
+2026-05-05 18:36:38,955 - openevolve.process_parallel - INFO - Iteration 14: Program 86b89acd-c366-43c4-8fa5-061f5c187143 (parent: a761bea2-6439-4756-84a1-52845550eb32) completed in 387.95s
+2026-05-05 18:36:38,955 - openevolve.process_parallel - INFO - Metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:36:38,955 - openevolve.process_parallel - INFO - 🌟 New best solution found at iteration 14: 86b89acd-c366-43c4-8fa5-061f5c187143
+2026-05-05 18:36:38,956 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 14
+2026-05-05 18:36:38,956 - openevolve.database - INFO - Island Status:
+2026-05-05 18:36:38,956 - openevolve.database - INFO -  * Island 0: 10 programs, best=9802.0000, avg=9772.7000, diversity=99.88, gen=14 (best: 86b89acd-c366-43c4-8fa5-061f5c187143)
+2026-05-05 18:36:38,956 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:36:38,956 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:36:38,956 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:36:38,956 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:36:38,962 - openevolve.database - INFO - Saved database with 15 programs to run_20260505_154001/checkpoints/checkpoint_14
+2026-05-05 18:36:38,962 - openevolve.controller - INFO - Saved best program at checkpoint 14 with metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:36:38,962 - openevolve.controller - INFO - Saved checkpoint at iteration 14 to run_20260505_154001/checkpoints/checkpoint_14
+2026-05-05 18:39:39,104 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 18:44:40,947 - openevolve.evaluator - INFO - Evaluated program c626ec2a-4be6-4c07-a324-c8587042ebf0 in 301.84s: combined_score=9791.0000, makespan_s=209.0000, max_p95_us=373.6000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:44:40,950 - openevolve.process_parallel - INFO - Iteration 15: Program c626ec2a-4be6-4c07-a324-c8587042ebf0 (parent: 1c76e84d-dd16-491a-817a-81a802dd3dae) completed in 482.00s
+2026-05-05 18:44:40,950 - openevolve.process_parallel - INFO - Metrics: combined_score=9791.0000, makespan_s=209.0000, max_p95_us=373.6000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:44:40,950 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 15
+2026-05-05 18:44:40,950 - openevolve.llm.ensemble - INFO - Sampled model: moonshotai/Kimi-K2.5
+2026-05-05 18:44:40,950 - openevolve.database - INFO - Island Status:
+2026-05-05 18:44:40,950 - openevolve.database - INFO -  * Island 0: 11 programs, best=9802.0000, avg=9774.3636, diversity=99.88, gen=15 (best: 86b89acd-c366-43c4-8fa5-061f5c187143)
+2026-05-05 18:44:40,950 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:44:40,950 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:44:40,950 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:44:40,950 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:44:40,953 - openevolve.database - INFO - Saved database with 16 programs to run_20260505_154001/checkpoints/checkpoint_15
+2026-05-05 18:44:40,954 - openevolve.controller - INFO - Saved best program at checkpoint 15 with metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:44:40,954 - openevolve.controller - INFO - Saved checkpoint at iteration 15 to run_20260505_154001/checkpoints/checkpoint_15
+2026-05-05 18:47:10,205 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 18:52:48,837 - openevolve.evaluator - INFO - Evaluated program 799fa011-7f70-4041-b71a-51fbfdec4a1f in 338.63s: combined_score=9772.0000, makespan_s=228.0000, max_p95_us=387.7000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:52:48,840 - openevolve.llm.ensemble - INFO - Sampled model: moonshotai/Kimi-K2.5
+2026-05-05 18:52:48,848 - openevolve.process_parallel - INFO - Iteration 16: Program 799fa011-7f70-4041-b71a-51fbfdec4a1f (parent: d348ee4a-738f-458d-8865-bb52114e099e) completed in 487.89s
+2026-05-05 18:52:48,848 - openevolve.process_parallel - INFO - Metrics: combined_score=9772.0000, makespan_s=228.0000, max_p95_us=387.7000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:52:48,848 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 16
+2026-05-05 18:52:48,849 - openevolve.database - INFO - Island Status:
+2026-05-05 18:52:48,849 - openevolve.database - INFO -  * Island 0: 12 programs, best=9802.0000, avg=9774.1667, diversity=1.77, gen=16 (best: 86b89acd-c366-43c4-8fa5-061f5c187143)
+2026-05-05 18:52:48,849 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:52:48,849 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:52:48,849 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:52:48,849 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:52:48,853 - openevolve.database - INFO - Saved database with 17 programs to run_20260505_154001/checkpoints/checkpoint_16
+2026-05-05 18:52:48,854 - openevolve.controller - INFO - Saved best program at checkpoint 16 with metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:52:48,854 - openevolve.controller - INFO - Saved checkpoint at iteration 16 to run_20260505_154001/checkpoints/checkpoint_16
+2026-05-05 18:53:40,524 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 18:59:09,715 - openevolve.evaluator - INFO - Evaluated program 59c4a98e-354c-4611-8379-ed229bc74dde in 329.19s: combined_score=9780.0000, makespan_s=220.0000, max_p95_us=402.5000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:59:09,718 - openevolve.llm.ensemble - INFO - Sampled model: moonshotai/Kimi-K2.5
+2026-05-05 18:59:09,721 - openevolve.database - INFO - New MAP-Elites cell occupied in island 0: {'complexity': 1, 'diversity': 7}
+2026-05-05 18:59:09,722 - openevolve.process_parallel - INFO - Iteration 17: Program 59c4a98e-354c-4611-8379-ed229bc74dde (parent: a761bea2-6439-4756-84a1-52845550eb32) completed in 380.88s
+2026-05-05 18:59:09,722 - openevolve.process_parallel - INFO - Metrics: combined_score=9780.0000, makespan_s=220.0000, max_p95_us=402.5000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:59:09,722 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 17
+2026-05-05 18:59:09,722 - openevolve.database - INFO - Island Status:
+2026-05-05 18:59:09,722 - openevolve.database - INFO -  * Island 0: 13 programs, best=9802.0000, avg=9774.6154, diversity=229.63, gen=17 (best: 86b89acd-c366-43c4-8fa5-061f5c187143)
+2026-05-05 18:59:09,722 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:59:09,722 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:59:09,722 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:59:09,722 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 18:59:09,727 - openevolve.database - INFO - Saved database with 18 programs to run_20260505_154001/checkpoints/checkpoint_17
+2026-05-05 18:59:09,728 - openevolve.controller - INFO - Saved best program at checkpoint 17 with metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 18:59:09,728 - openevolve.controller - INFO - Saved checkpoint at iteration 17 to run_20260505_154001/checkpoints/checkpoint_17
+2026-05-05 19:00:54,745 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 19:06:14,784 - openevolve.evaluator - INFO - Evaluated program 6536e434-d720-4043-a94c-bf4c692bfdf9 in 320.04s: combined_score=9788.0000, makespan_s=212.0000, max_p95_us=389.5000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:06:14,788 - openevolve.llm.ensemble - INFO - Sampled model: moonshotai/Kimi-K2.5
+2026-05-05 19:06:14,793 - openevolve.process_parallel - INFO - Iteration 18: Program 6536e434-d720-4043-a94c-bf4c692bfdf9 (parent: b57c5815-291c-44ac-ac35-03878949c74b) completed in 425.07s
+2026-05-05 19:06:14,793 - openevolve.process_parallel - INFO - Metrics: combined_score=9788.0000, makespan_s=212.0000, max_p95_us=389.5000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:06:14,793 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 18
+2026-05-05 19:06:14,793 - openevolve.database - INFO - Island Status:
+2026-05-05 19:06:14,793 - openevolve.database - INFO -  * Island 0: 14 programs, best=9802.0000, avg=9775.5714, diversity=229.98, gen=18 (best: 86b89acd-c366-43c4-8fa5-061f5c187143)
+2026-05-05 19:06:14,793 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:06:14,793 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:06:14,793 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:06:14,793 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:06:14,797 - openevolve.database - INFO - Saved database with 19 programs to run_20260505_154001/checkpoints/checkpoint_18
+2026-05-05 19:06:14,798 - openevolve.controller - INFO - Saved best program at checkpoint 18 with metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:06:14,798 - openevolve.controller - INFO - Saved checkpoint at iteration 18 to run_20260505_154001/checkpoints/checkpoint_18
+2026-05-05 19:07:41,023 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 19:13:05,537 - openevolve.evaluator - INFO - Evaluated program 36c43297-ed92-4e90-9d60-f4114545a5ed in 324.51s: combined_score=9786.0000, makespan_s=214.0000, max_p95_us=387.3000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:13:05,543 - openevolve.llm.ensemble - INFO - Sampled model: moonshotai/Kimi-K2.5
+2026-05-05 19:13:05,549 - openevolve.process_parallel - INFO - Iteration 19: Program 36c43297-ed92-4e90-9d60-f4114545a5ed (parent: 4a2d83ba-5a15-482f-8049-85cdb7c1d89c) completed in 410.75s
+2026-05-05 19:13:05,550 - openevolve.process_parallel - INFO - Metrics: combined_score=9786.0000, makespan_s=214.0000, max_p95_us=387.3000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:13:05,550 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 19
+2026-05-05 19:13:05,550 - openevolve.database - INFO - Island Status:
+2026-05-05 19:13:05,550 - openevolve.database - INFO -  * Island 0: 15 programs, best=9802.0000, avg=9776.2667, diversity=153.88, gen=19 (best: 86b89acd-c366-43c4-8fa5-061f5c187143)
+2026-05-05 19:13:05,550 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:13:05,550 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:13:05,550 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:13:05,550 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:13:05,557 - openevolve.database - INFO - Saved database with 20 programs to run_20260505_154001/checkpoints/checkpoint_19
+2026-05-05 19:13:05,558 - openevolve.controller - INFO - Saved best program at checkpoint 19 with metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:13:05,558 - openevolve.controller - INFO - Saved checkpoint at iteration 19 to run_20260505_154001/checkpoints/checkpoint_19
+2026-05-05 19:16:08,679 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 19:21:37,423 - openevolve.evaluator - INFO - Evaluated program 28cc38f1-58b3-4c04-850e-1d4f1a7fda9d in 328.74s: combined_score=9779.0000, makespan_s=221.0000, max_p95_us=383.2000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:21:37,435 - openevolve.process_parallel - INFO - Iteration 20: Program 28cc38f1-58b3-4c04-850e-1d4f1a7fda9d (parent: 7d0df73a-2028-45d9-876b-a8edec0d5a17) completed in 511.88s
+2026-05-05 19:21:37,435 - openevolve.process_parallel - INFO - Metrics: combined_score=9779.0000, makespan_s=221.0000, max_p95_us=383.2000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:21:37,435 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 20
+2026-05-05 19:21:37,435 - openevolve.database - INFO - Island Status:
+2026-05-05 19:21:37,435 - openevolve.database - INFO -  * Island 0: 16 programs, best=9802.0000, avg=9776.4375, diversity=153.92, gen=20 (best: 86b89acd-c366-43c4-8fa5-061f5c187143)
+2026-05-05 19:21:37,435 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:21:37,435 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:21:37,435 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:21:37,435 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 19:21:37,444 - openevolve.database - INFO - Saved database with 21 programs to run_20260505_154001/checkpoints/checkpoint_20
+2026-05-05 19:21:37,445 - openevolve.controller - INFO - Saved best program at checkpoint 20 with metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:21:37,445 - openevolve.controller - INFO - Saved checkpoint at iteration 20 to run_20260505_154001/checkpoints/checkpoint_20
+2026-05-05 19:21:37,445 - openevolve.process_parallel - INFO - ✅ Evolution completed - Maximum iterations reached
+2026-05-05 19:21:37,452 - openevolve.database - INFO - Saved database with 21 programs to run_20260505_154001/checkpoints/checkpoint_20
+2026-05-05 19:21:37,452 - openevolve.controller - INFO - Saved best program at checkpoint 20 with metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:21:37,453 - openevolve.controller - INFO - Saved checkpoint at iteration 20 to run_20260505_154001/checkpoints/checkpoint_20
+2026-05-05 19:21:37,461 - openevolve.process_parallel - INFO - Stopped process pool
+2026-05-05 19:21:37,461 - openevolve.controller - INFO - Using tracked best program: 86b89acd-c366-43c4-8fa5-061f5c187143
+2026-05-05 19:21:37,461 - openevolve.controller - INFO - Evolution complete. Best program has metrics: combined_score=9802.0000, makespan_s=198.0000, max_p95_us=398.1000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 19:21:37,461 - openevolve.controller - INFO - Saved best program to run_20260505_154001/best/best_program.py with program info to run_20260505_154001/best/best_program_info.json

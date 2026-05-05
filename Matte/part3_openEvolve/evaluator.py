@@ -24,7 +24,8 @@ except ModuleNotFoundError:
 BASE_DIR = Path(__file__).resolve().parent
 AUTOMATION_DIR = BASE_DIR.parent / "automation"
 TIMES_CSV_PATH = BASE_DIR.parent.parent / "Part2summary_times.csv"
-EXPERIMENT_CONFIG = AUTOMATION_DIR / "experiment.yaml"
+EXPERIMENT_CONFIG = AUTOMATION_DIR / "experimentOPENEVOLVE.yaml"
+EVALUATION_RUNS_ROOT = AUTOMATION_DIR / "runs"
 AUDIT_TIMEOUT_S = 120
 RUN_TIMEOUT_S = 5200
 
@@ -88,6 +89,26 @@ def _run_command(args: list[str], *, timeout_s: int) -> subprocess.CompletedProc
         timeout=timeout_s,
         check=False,
     )
+
+
+def _write_evaluation_experiment_config(temp_dir: Path) -> Path:
+    raw = yaml.safe_load(EXPERIMENT_CONFIG.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{EXPERIMENT_CONFIG} must contain a top-level mapping")
+
+    for key in ("cluster_config_path", "ssh_key_path"):
+        path_value = raw.get(key)
+        if not isinstance(path_value, str):
+            continue
+        path = Path(path_value).expanduser()
+        if not path.is_absolute():
+            raw[key] = str((EXPERIMENT_CONFIG.parent / path_value).resolve())
+
+    raw["results_root"] = str(EVALUATION_RUNS_ROOT)
+
+    config_path = temp_dir / "experiment.yaml"
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    return config_path
 
 
 def _find_summary_path(run_stdout: str) -> Path | None:
@@ -208,13 +229,27 @@ def evaluate(program_path: str) -> EvaluationResult:
                 extra_metrics={"audit_pass": 0.0, "run_completed": 0.0},
             )
 
+        try:
+            experiment_config_path = _write_evaluation_experiment_config(Path(temp_dir))
+        except Exception as exc:
+            return _result(
+                combined_score=-9000.0,
+                artifacts={
+                    "error_type": type(exc).__name__,
+                    "error_message": f"Could not write evaluator experiment config: {exc}",
+                    "traceback": _artifact_text(traceback.format_exc()),
+                    "audit_stdout": _artifact_text(audit_res.stdout),
+                },
+                extra_metrics={"audit_pass": 1.0, "run_completed": 0.0},
+            )
+
         run_cmd = [
             sys.executable,
             "cli.py",
             "run",
             "once",
             "--config",
-            str(EXPERIMENT_CONFIG),
+            str(experiment_config_path),
             "--policy",
             str(policy_path),
         ]

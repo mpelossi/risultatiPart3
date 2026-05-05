@@ -100,27 +100,38 @@ python3 gui.py --policy other-schedule.yaml --times-csv /path/to/Part2summary_ti
 python3 cli.py run once --config experiment.yaml --policy schedule.yaml --dry-run
 ```
 
-### 6. Run one real experiment
+### 6. Warm images without a measurement run
 
 ```bash
-python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache
+python3 cli.py run precache --config experiment.yaml --policy schedule.yaml
 ```
 
-`--precache` is recommended before serious benchmark runs. It warms all benchmark and
-memcached images on both benchmark nodes so the measured run does not spend time pulling
-containers.
+This creates transient pre-cache pods on both benchmark nodes, waits for all benchmark
+and memcached images to be present, deletes those pods, and exits before launching
+memcached, `mcperf`, or benchmark jobs. Artifacts are written under
+`runs/__precache/<experiment_id>/<timestamp>` so they do not appear as benchmark runs.
 
-After the first warm run on an unchanged cluster, repeating `run once --precache` is safe
+### 7. Run one real experiment
+
+```bash
+python3 cli.py run once --config experiment.yaml --policy schedule.yaml
+```
+
+Use `--precache` here only when you want the real run itself to do the warmup first.
+If you already ran `run precache` on an unchanged cluster, omit `--precache` so the
+measurement starts sooner.
+
+After the first warmup on an unchanged cluster, repeating `run once --precache` is safe
 but usually optional because the images should already be present. For `run batch
 --precache`, the automation warms images once before the first repetition only.
 
-### 7. Run three repetitions
+### 8. Run three repetitions
 
 ```bash
 python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache
 ```
 
-### 7b. Run multiple schedules as a queue
+### 8b. Run multiple schedules as a queue
 
 Create a queue file such as:
 
@@ -145,7 +156,7 @@ Each `policy` path is resolved relative to the queue file. `runs: 1` behaves lik
 `run once`; larger values behave like `run batch`. With `--precache`, images are warmed
 only before the first real queued run.
 
-### 7c. Rebuild runtime stats from saved runs
+### 8c. Rebuild runtime stats from saved runs
 
 Real runs refresh `runs/runtime_stats.json` automatically. If you want to backfill from
 old runs, or you edited/copied run artifacts by hand, rebuild it explicitly:
@@ -377,26 +388,45 @@ python3 cli.py run once --config experiment.yaml --policy schedule.yaml --dry-ru
 
 This renders manifests and writes the phase plan, but does not touch the live cluster.
 
-### Step 6. Real run
+### Step 6. Pre-cache images without measuring
 
 Run:
 
 ```bash
-python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache
+python3 cli.py run precache --config experiment.yaml --policy schedule.yaml
 ```
 
 This:
 - cleans previous managed jobs and pods
 - checks client provisioning
-- optionally pre-pulls all benchmark images on both benchmark nodes
+- creates transient pre-cache pods on both benchmark nodes
+- waits for all benchmark and memcached images to be present
+- deletes the pre-cache pods
+- writes `precache.json` and `events.log` under `runs/__precache/<experiment_id>/<timestamp>`
+
+It does not launch memcached, start `mcperf`, run benchmark jobs, capture `results.json`,
+or refresh runtime stats.
+
+### Step 7. Real run
+
+Run:
+
+```bash
+python3 cli.py run once --config experiment.yaml --policy schedule.yaml
+```
+
+This:
+- cleans previous managed jobs and pods
+- checks client provisioning
 - launches memcached
 - starts the `mcperf` measurement
 - launches the batch phases in schedule order
 - stops `mcperf` when the last batch job completes
 - captures `results.json`, `mcperf.txt`, and `summary.json`
 
-`--precache` is recommended for serious timing runs. It warms the images once and then
-deletes the transient warmup pods before memcached and the benchmark jobs start.
+For serious timing runs, either run the standalone pre-cache command first or pass
+`--precache` to this command. The standalone command is useful when you want to warm
+images once without spending time or credits on a full measurement run.
 
 `results.json` is the raw `kubectl get pods -o json` snapshot that matches the assignment
 workflow. `summary.json` is a derived convenience report built from `results.json` and
@@ -411,15 +441,15 @@ file stores per-job observed runtimes grouped by job, node, thread count, and me
 placement. Refresh failure is logged as a warning and does not mark the benchmark run as
 failed.
 
-If you already warmed the images on this cluster, you may omit `--precache` on later
-single runs. Re-running it is not harmful; it just creates short-lived image-warmup pods
-and deletes them before memcached starts.
+If you already warmed the images on this cluster, omit `--precache` on later single runs.
+Re-running pre-cache is not harmful; it just creates short-lived image-warmup pods and
+deletes them before memcached starts.
 
 When the run stops measurement, the signal is sent only to the temporary `mcperf` wrapper on
 `client-measure`. It does not target the memcached pod or the long-lived
 `mcperf-agent.service` processes on `client-agent-a` / `client-agent-b`.
 
-### Step 7. Repeated runs
+### Step 8. Repeated runs
 
 Run:
 
@@ -430,7 +460,7 @@ python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 
 Use this when you want the three measurement files needed for submission. With `--precache`,
 the warmup happens once before the first run only.
 
-### Step 8. Pick the best run
+### Step 9. Pick the best run
 
 If this checkout already contains run artifacts, or you copied run folders in manually,
 first rebuild the run-derived runtime statistics:
@@ -459,7 +489,7 @@ This sorts the runs by:
 By default it reads from this automation directory's own `runs/` folder, so you usually do
 not need to pass `--results-root`.
 
-### Step 9. Export the submission folder
+### Step 10. Export the submission folder
 
 Run:
 
@@ -506,9 +536,14 @@ Opens the Tkinter planner GUI for the current schedule. From inside this directo
 
 Builds the manifests and phase plan without touching the cluster.
 
+### `python3 cli.py run precache --config experiment.yaml --policy schedule.yaml`
+
+Warms benchmark and memcached images on both benchmark nodes, then exits without a
+measurement run. Writes artifacts under `runs/__precache/...`.
+
 ### `python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache`
 
-Runs one full live experiment. `--precache` is recommended.
+Runs one full live experiment and performs the image warmup before memcached starts.
 
 ### `python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache`
 

@@ -1,0 +1,120 @@
+2026-05-05 21:18:36,912 - openevolve.controller - INFO - Logging to runs/run_20260505_211836/logs/openevolve_20260505_211836.log
+2026-05-05 21:18:36,916 - openevolve.controller - INFO - Set random seed to 42 for reproducibility
+2026-05-05 21:18:36,944 - openevolve.llm.openai - INFO - Initialized OpenAI LLM with model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 21:18:36,944 - openevolve.llm.ensemble - INFO - Initialized LLM ensemble with models: zai-org/GLM-5.1-FP8-pOah (weight: 1.00)
+2026-05-05 21:18:36,962 - openevolve.prompt.sampler - INFO - Initialized prompt sampler
+2026-05-05 21:18:36,962 - openevolve.prompt.sampler - INFO - Set custom templates: system=evaluator_system_message, user=None
+2026-05-05 21:18:36,962 - openevolve.database - INFO - Initialized program database with 0 programs
+2026-05-05 21:18:36,963 - openevolve.evaluator - INFO - Successfully loaded evaluation function from evaluator.py
+2026-05-05 21:18:36,963 - openevolve.evaluator - INFO - Initialized evaluator with evaluator.py
+2026-05-05 21:18:36,963 - openevolve.controller - INFO - Initialized OpenEvolve with initial_program.py
+2026-05-05 21:18:36,963 - openevolve.controller - INFO - Adding initial program to database
+2026-05-05 21:23:45,949 - openevolve.evaluator - INFO - Evaluated program fb26c921-1b45-42c9-aadb-89a9c9bf848e in 308.99s: combined_score=9804.0000, makespan_s=196.0000, max_p95_us=388.9000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 21:23:45,949 - openevolve.database - INFO - New MAP-Elites cell occupied in island 0: {'complexity': 5, 'diversity': 0}
+2026-05-05 21:23:45,950 - openevolve.process_parallel - INFO - Initialized process parallel controller with 1 workers
+2026-05-05 21:23:45,950 - openevolve.process_parallel - INFO - Set max None tasks per child
+2026-05-05 21:23:45,951 - openevolve.process_parallel - INFO - Started process pool with 1 processes
+2026-05-05 21:23:45,951 - openevolve.controller - INFO - Using island-based evolution with 5 islands
+2026-05-05 21:23:45,951 - openevolve.database - INFO - Island Status:
+2026-05-05 21:23:45,951 - openevolve.database - INFO -  * Island 0: 1 programs, best=9804.0000, avg=9804.0000, diversity=0.00, gen=0 (best: fb26c921-1b45-42c9-aadb-89a9c9bf848e)
+2026-05-05 21:23:45,951 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 21:23:45,951 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 21:23:45,951 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 21:23:45,951 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 21:23:45,951 - openevolve.process_parallel - INFO - Starting process-based evolution from iteration 1 for 15 iterations (total: 16)
+2026-05-05 21:23:45,955 - openevolve.process_parallel - INFO - Early stopping disabled
+2026-05-05 21:23:45,993 - openevolve.prompt.sampler - INFO - Set custom templates: system=evaluator_system_message, user=None
+2026-05-05 21:23:45,994 - openevolve.evaluator - INFO - Successfully loaded evaluation function from evaluator.py
+2026-05-05 21:23:45,994 - openevolve.evaluator - INFO - Initialized evaluator with evaluator.py
+2026-05-05 21:23:45,995 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 21:39:07,841 - openevolve.llm.openai - ERROR - All 1 attempts failed with timeout
+2026-05-05 21:39:08,126 - openevolve.process_parallel - ERROR - LLM generation failed: 
+2026-05-05 21:39:08,128 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 21:39:08,129 - openevolve.process_parallel - WARNING - Iteration 1 error: LLM generation failed: 
+2026-05-05 21:42:33,213 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-05 21:47:38,243 - openevolve.evaluator - INFO - Evaluated program 3af3959e-96f1-4727-989e-972bfac6661b in 305.02s: combined_score=9790.0000, makespan_s=210.0000, max_p95_us=387.0000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 21:47:38,245 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 21:47:38,250 - openevolve.database - INFO - New MAP-Elites cell occupied in island 0: {'complexity': 0, 'diversity': 5}
+2026-05-05 21:47:38,251 - openevolve.process_parallel - INFO - Iteration 2: Program 3af3959e-96f1-4727-989e-972bfac6661b (parent: fb26c921-1b45-42c9-aadb-89a9c9bf848e) completed in 510.12s
+2026-05-05 21:47:38,251 - openevolve.process_parallel - INFO - Metrics: combined_score=9790.0000, makespan_s=210.0000, max_p95_us=387.0000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 21:47:38,251 - openevolve.process_parallel - INFO - Checkpoint interval reached at iteration 2
+2026-05-05 21:47:38,251 - openevolve.database - INFO - Island Status:
+2026-05-05 21:47:38,251 - openevolve.database - INFO -  * Island 0: 2 programs, best=9804.0000, avg=9797.0000, diversity=0.80, gen=1 (best: fb26c921-1b45-42c9-aadb-89a9c9bf848e)
+2026-05-05 21:47:38,251 - openevolve.database - INFO -    Island 1: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 21:47:38,251 - openevolve.database - INFO -    Island 2: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 21:47:38,251 - openevolve.database - INFO -    Island 3: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 21:47:38,251 - openevolve.database - INFO -    Island 4: 0 programs, best=0.0000, avg=0.0000, diversity=0.00, gen=0
+2026-05-05 21:47:38,253 - openevolve.database - INFO - Saved database with 2 programs to runs/run_20260505_211836/checkpoints/checkpoint_2
+2026-05-05 21:47:38,253 - openevolve.controller - INFO - Saved best program at checkpoint 2 with metrics: combined_score=9804.0000, makespan_s=196.0000, max_p95_us=388.9000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 21:47:38,253 - openevolve.controller - INFO - Saved checkpoint at iteration 2 to runs/run_20260505_211836/checkpoints/checkpoint_2
+2026-05-05 22:02:38,346 - openevolve.llm.openai - ERROR - All 1 attempts failed with timeout
+2026-05-05 22:02:38,395 - openevolve.process_parallel - ERROR - LLM generation failed: 
+2026-05-05 22:02:38,396 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:02:38,402 - openevolve.process_parallel - WARNING - Iteration 3 error: LLM generation failed: 
+2026-05-05 22:03:37,218 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 500 Internal Server Error"
+2026-05-05 22:03:37,220 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Internal Server Error
+2026-05-05 22:03:37,221 - openevolve.process_parallel - ERROR - LLM generation failed: Internal Server Error
+2026-05-05 22:03:37,221 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,231 - openevolve.process_parallel - WARNING - Iteration 4 error: LLM generation failed: Internal Server Error
+2026-05-05 22:03:37,250 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,251 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,252 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,252 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,253 - openevolve.process_parallel - WARNING - Iteration 5 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,278 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,278 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,280 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,281 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,284 - openevolve.process_parallel - WARNING - Iteration 6 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,310 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,310 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,311 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,313 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,315 - openevolve.process_parallel - WARNING - Iteration 7 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,348 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,349 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,349 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,351 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,357 - openevolve.process_parallel - WARNING - Iteration 8 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,383 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,384 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,385 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,385 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,389 - openevolve.process_parallel - WARNING - Iteration 9 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,412 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,413 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,414 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,415 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,420 - openevolve.process_parallel - WARNING - Iteration 10 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,443 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,444 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,445 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,448 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,452 - openevolve.process_parallel - WARNING - Iteration 11 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,481 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,482 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,484 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,485 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,493 - openevolve.process_parallel - WARNING - Iteration 12 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,515 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,516 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,518 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,520 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,525 - openevolve.process_parallel - WARNING - Iteration 13 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,551 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,552 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,553 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,554 - openevolve.llm.ensemble - INFO - Sampled model: zai-org/GLM-5.1-FP8-pOah
+2026-05-05 22:03:37,556 - openevolve.process_parallel - WARNING - Iteration 14 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,585 - httpx - INFO - HTTP Request: POST https://api.swissai.cscs.ch/v1/chat/completions "HTTP/1.1 503 Service Unavailable"
+2026-05-05 22:03:37,586 - openevolve.llm.openai - ERROR - All 1 attempts failed with error: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,587 - openevolve.process_parallel - ERROR - LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,597 - openevolve.process_parallel - WARNING - Iteration 15 error: LLM generation failed: Error code: 503 - {'error': 'No provider found for the requested service.'}
+2026-05-05 22:03:37,597 - openevolve.process_parallel - INFO - ✅ Evolution completed - Maximum iterations reached
+2026-05-05 22:03:37,599 - openevolve.database - INFO - Saved database with 2 programs to runs/run_20260505_211836/checkpoints/checkpoint_15
+2026-05-05 22:03:37,599 - openevolve.controller - INFO - Saved best program at checkpoint 15 with metrics: combined_score=9804.0000, makespan_s=196.0000, max_p95_us=388.9000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 22:03:37,599 - openevolve.controller - INFO - Saved checkpoint at iteration 15 to runs/run_20260505_211836/checkpoints/checkpoint_15
+2026-05-05 22:03:37,606 - openevolve.process_parallel - INFO - Stopped process pool
+2026-05-05 22:03:37,606 - openevolve.controller - INFO - Using tracked best program: fb26c921-1b45-42c9-aadb-89a9c9bf848e
+2026-05-05 22:03:37,606 - openevolve.controller - INFO - Evolution complete. Best program has metrics: combined_score=9804.0000, makespan_s=196.0000, max_p95_us=388.9000, slo_violations=0.0000, status_pass=1.0000, audit_pass=1.0000, run_completed=1.0000
+2026-05-05 22:03:37,607 - openevolve.controller - INFO - Saved best program to runs/run_20260505_211836/best/best_program.py with program info to runs/run_20260505_211836/best/best_program_info.json
