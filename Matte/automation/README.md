@@ -20,7 +20,24 @@ cd risultatiPart3/Matte/automation
 python3 cli.py cluster up --config experiment.yaml
 ```
 
-If `cluster up` fails or gets interrupted, clean up before retrying:
+If `cluster up` only fails during the final `kops validate cluster --wait 10m` step with
+`connect: connection refused`, `i/o timeout`, or `TLS handshake timeout`, first give the
+API server more time:
+
+```bash
+export KOPS_STATE_STORE=gs://cca-eth-2026-group-54-mpelossi
+kops validate cluster --name part3.k8s.local --wait 20m
+```
+
+If that succeeds, finish the automation step once so kubeconfig is exported and the nodes
+get the expected labels:
+
+```bash
+python3 cli.py cluster up --config experiment.yaml
+```
+
+If validation still cannot reach the API server, or `cluster up` failed before validation,
+clean up before retrying:
 
 ```bash
 python3 cli.py cluster down --config experiment.yaml
@@ -241,8 +258,26 @@ This does the full bring-up flow:
 
 You do **not** need to run this before every experiment.
 
-If `cluster up` fails or is interrupted, do **not** immediately retry it on top of the
-half-finished state. Run:
+If `cluster up` fails only at `kops validate cluster --wait 10m`, do **not** delete the
+cluster immediately. The control-plane VM can exist before the Kubernetes API server is
+ready, which shows up as errors like `connect: connection refused`, `i/o timeout`, or
+`TLS handshake timeout`. Try a longer standalone validation first:
+
+```bash
+export KOPS_STATE_STORE=gs://cca-eth-2026-group-54-mpelossi
+kops validate cluster --name part3.k8s.local --wait 20m
+```
+
+If that succeeds, run the automation command again once:
+
+```bash
+python3 cli.py cluster up --config experiment.yaml
+```
+
+The second run should pass validation quickly, export kubeconfig, and label the nodes.
+
+If validation still cannot reach the API server after the longer wait, or if `cluster up`
+failed before the validation phase, clean up before retrying:
 
 ```bash
 python3 cli.py cluster down --config experiment.yaml
@@ -536,7 +571,34 @@ If the cluster already exists and you only need kubeconfig:
 kops export kubecfg --admin --name part3.k8s.local
 ```
 
-### `cluster up` failed halfway through
+### `cluster up` timed out in `kops validate cluster`
+
+If the failure is only:
+
+```text
+error listing nodes: Get "https://.../api/v1/nodes": connect: connection refused
+validation failed: wait time exceeded during validation
+```
+
+try validation once more before deleting the cluster:
+
+```bash
+export KOPS_STATE_STORE=gs://cca-eth-2026-group-54-mpelossi
+kops validate cluster --name part3.k8s.local --wait 20m
+```
+
+If this succeeds, finish the normal setup path:
+
+```bash
+python3 cli.py cluster up --config experiment.yaml
+python3 cli.py provision check --config experiment.yaml
+```
+
+Use `cluster down` only if the longer validation still cannot reach the API server, if
+`../../checkCredits.sh` shows broken leftover network artifacts, or if the bring-up failed
+before the validation phase.
+
+### `cluster up` failed before validation or still cannot validate
 
 Clean up first:
 

@@ -1,0 +1,74 @@
+max_iterations: 15
+checkpoint_interval: 1
+
+llm:
+  api_base: "https://api.swissai.cscs.ch/v1"
+  primary_model: "zai-org/GLM-5.1-FP8-hvhj"
+  top_p: 0.7
+  timeout: 120
+  max_tokens: 16000
+
+prompt:
+  system_message: |
+    You are an expert cloud infrastructure scheduler. Your goal is to optimize a Kubernetes scheduling policy for Part 3 of a cloud computing assignment: minimize the total makespan of seven batch jobs while keeping a latency-critical memcached deployment below a strict 1ms p95 latency SLO at 30K QPS.
+
+    You are editing a Python dictionary returned by get_schedule(). Only edit code inside the EVOLVE-BLOCK comments.
+
+    Cluster:
+    - node-a-8core is the 8-core 24GB RAM VM with cores 0-7.
+    - node-b-4core is the 4-core 4GB RAM VM with cores 0-3.
+    - The nodes differ in CPU platform and memory capacity, so a job can behave differently across nodes.
+    - The batch applications use the native dataset size.
+
+    Required workload:
+    - Schedule exactly these seven batch jobs once each: barnes, blackscholes, canneal, freqmine, radix, streamcluster, vips.
+    - Also schedule memcached continuously. Memcached starts first and receives steady 30K QPS load throughout the batch run.
+
+    Policy schema:
+    - The returned dictionary must contain policy_name, memcached, and jobs.
+    - memcached must contain node, cores, and threads.
+    - jobs must contain one entry for each required batch job.
+    - Each job entry must contain node, cores, threads, and after.
+
+    Policy rules:
+    - Each job and memcached entry must include node, cores, and threads.
+    - cores must be a valid Linux taskset string, for example "0-3", "4,5,6", or "0".
+    - threads must be a positive integer and cannot exceed the number of pinned cores.
+    - Jobs or memcached running on the same node at the same time must not overlap pinned cores.
+    - A job's after value may be "start", a single job name, or a list of job names. A list means the job starts after all listed jobs finish.
+    - Keep policy_name descriptive and short.
+
+    Hard safety rules:
+    - NEVER schedule radix on node-b-4core. It crashes the 4-core 4GB VM.
+    - radix.threads must be exactly one of {1, 2, 4, 8}. Radix can crash with non-power-of-two thread counts.
+
+    Memcached SLO guidance:
+    - Prefer keeping memcached on one isolated dedicated core.
+    - Avoid sharing memcached's core with any batch job.
+    - Avoid CPU-heavy and cache-heavy colocations near memcached when possible, because memcached is sensitive to CPU, L1, L2, and LLC interference.
+
+    Observed heuristics from prior experiments:
+    - blackscholes is the safest job near memcached and gains little beyond 4 threads.
+    - streamcluster, radix, barnes, and vips scale well with more cores.
+    - canneal scales poorly and is memory/cache sensitive.
+    - freqmine benefits from higher thread counts but is sensitive to CPU, L1 instruction cache, and LLC contention.
+    - vips and streamcluster can stress cache and memory resources, so place them carefully around memcached.
+
+    Search strategy:
+    - Exploit parallelism on node-a-8core whenever core sets do not overlap.
+    - Serialize jobs that reuse the same core set by using after dependencies.
+    - Use after lists when a job must wait for multiple predecessor jobs to finish.
+    - Prefer schedules that keep both nodes busy while preserving memcached's SLO and avoiding known crash cases.
+
+    Return only valid Python code for the EVOLVE-BLOCK contents. Do not include markdown fences.
+
+database:
+  population_size: 200
+
+evaluator:
+  cascade_evaluation: false
+  parallel_evaluations: 1
+  timeout: 5400
+
+diff_based_evolution: true
+max_code_length: 50000
