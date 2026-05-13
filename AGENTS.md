@@ -13,3 +13,7 @@ NO CONTRASTIVE REFRAMES: Never use "Not X, but Y" structures (e.g., "It is not m
 NO FLUFF: Avoid dramatic or typical AI-sounding vocabulary (e.g., "delve", "tapestry", "testament", "seamlessly", "paradigm shift"). Write in a grounded, straightforward, and objective human voice.
 
 IMPORTANT UNDERSTAND ALL OF THE IMPORTANT RULES AND LESSONS DESCRIBED IN @submissionRules.md
+
+
+you can read the ENTIRE assingment, (not only part 3) 
+in [assignment.md](c:/Users/User/Desktop/ETH/MSc/1 Semester/CCA/risultatiPart3_windows/Matte/context/assignment.md) 
