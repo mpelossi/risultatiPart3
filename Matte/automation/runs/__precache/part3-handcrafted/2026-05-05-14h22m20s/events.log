@@ -1,0 +1,7 @@
+2026-05-05T12:22:20.182730+00:00 Pre-cache directory prepared: /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/__precache/part3-handcrafted/2026-05-05-14h22m20s
+2026-05-05T12:22:20.182789+00:00 Cleaning previous managed workloads
+2026-05-05T12:22:52.487027+00:00 Ensuring canonical node labels and checking client provisioning
+2026-05-05T12:23:01.279670+00:00 Pre-caching 8 images on benchmark nodes via 2 transient pod(s)
+2026-05-05T12:23:06.664054+00:00 Pre-cache pods completed successfully
+2026-05-05T12:23:07.436059+00:00 Pre-cache pods deleted
+2026-05-05T12:23:07.436495+00:00 Pre-cache only run completed successfully

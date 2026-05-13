@@ -1,0 +1,56 @@
+2026-05-09T14:59:06.770943+00:00 Run directory prepared: /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/part3-PartB/2026-05-09-16h59m06s
+2026-05-09T14:59:06.770986+00:00 Rendered 8 manifests into /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/part3-PartB/2026-05-09-16h59m06s/rendered_manifests
+2026-05-09T14:59:06.771000+00:00 Cleaning previous managed workloads
+2026-05-09T14:59:39.875496+00:00 Ensuring canonical node labels and checking client provisioning
+2026-05-09T14:59:51.348762+00:00 Applying memcached manifest
+2026-05-09T14:59:55.377986+00:00 Capturing benchmark node CPU platforms
+2026-05-09T14:59:58.615830+00:00 Benchmark node CPU platform capture complete: node-a-8core=e2-standard-8/AMD Rome, node-b-4core=n2d-highcpu-4/AMD Milan
+2026-05-09T14:59:58.616731+00:00 Restarting mcperf-agent.service on client-agent-a (client-agent-a-1p0l)
+2026-05-09T15:00:04.535136+00:00 mcperf-agent.service active on client-agent-a (client-agent-a-1p0l)
+2026-05-09T15:00:04.535422+00:00 Restarting mcperf-agent.service on client-agent-b (client-agent-b-j3kd)
+2026-05-09T15:00:10.730582+00:00 mcperf-agent.service active on client-agent-b (client-agent-b-j3kd)
+2026-05-09T15:00:10.730935+00:00 Starting measurement against memcached IP 100.96.4.88
+2026-05-09T15:00:11.202289+00:00 Waiting for first mcperf measurement sample
+2026-05-09T15:00:17.214887+00:00 mcperf measurement header observed
+2026-05-09T15:00:29.245435+00:00 mcperf measurement sample observed
+2026-05-09T15:00:29.246049+00:00 mcperf measurement is live
+2026-05-09T15:00:29.246212+00:00 Starting phase scheduler
+2026-05-09T15:00:29.629811+00:00 Phase dependency satisfied for phase-01: start
+2026-05-09T15:00:29.630237+00:00 Launching phase phase-01: streamcluster, blackscholes
+2026-05-09T15:00:30.845954+00:00 Scheduler heartbeat: launched_phases=['phase-01'] pending_phases=['phase-02', 'phase-03', 'phase-04', 'phase-05'] completed_jobs=[] running_jobs=['parsec-blackscholes-2026-05-09-16h59m06s', 'parsec-streamcluster-2026-05-09-16h59m06s']
+2026-05-09T15:00:46.878202+00:00 Scheduler heartbeat: launched_phases=['phase-01'] pending_phases=['phase-02', 'phase-03', 'phase-04', 'phase-05'] completed_jobs=[] running_jobs=['parsec-blackscholes-2026-05-09-16h59m06s', 'parsec-streamcluster-2026-05-09-16h59m06s']
+2026-05-09T15:01:03.510013+00:00 Scheduler heartbeat: launched_phases=['phase-01'] pending_phases=['phase-02', 'phase-03', 'phase-04', 'phase-05'] completed_jobs=[] running_jobs=['parsec-blackscholes-2026-05-09-16h59m06s', 'parsec-streamcluster-2026-05-09-16h59m06s']
+2026-05-09T15:01:19.218314+00:00 Scheduler heartbeat: launched_phases=['phase-01'] pending_phases=['phase-02', 'phase-03', 'phase-04', 'phase-05'] completed_jobs=[] running_jobs=['parsec-blackscholes-2026-05-09-16h59m06s', 'parsec-streamcluster-2026-05-09-16h59m06s']
+2026-05-09T15:01:21.905319+00:00 Job completed: parsec-blackscholes-2026-05-09-16h59m06s
+2026-05-09T15:01:21.905726+00:00 Phase dependency satisfied for phase-03: blackscholes
+2026-05-09T15:01:21.905948+00:00 Launching phase phase-03: canneal
+2026-05-09T15:01:35.931077+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05'] completed_jobs=['blackscholes'] running_jobs=['parsec-canneal-2026-05-09-16h59m06s', 'parsec-streamcluster-2026-05-09-16h59m06s']
+2026-05-09T15:01:50.943135+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05'] completed_jobs=['blackscholes'] running_jobs=['parsec-canneal-2026-05-09-16h59m06s', 'parsec-streamcluster-2026-05-09-16h59m06s']
+2026-05-09T15:02:06.819661+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05'] completed_jobs=['blackscholes'] running_jobs=['parsec-canneal-2026-05-09-16h59m06s', 'parsec-streamcluster-2026-05-09-16h59m06s']
+2026-05-09T15:02:23.007060+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05'] completed_jobs=['blackscholes'] running_jobs=['parsec-canneal-2026-05-09-16h59m06s', 'parsec-streamcluster-2026-05-09-16h59m06s']
+2026-05-09T15:02:28.565781+00:00 Job completed: parsec-streamcluster-2026-05-09-16h59m06s
+2026-05-09T15:02:28.565986+00:00 Phase dependency satisfied for phase-02: streamcluster
+2026-05-09T15:02:28.566032+00:00 Launching phase phase-02: freqmine
+2026-05-09T15:02:38.856013+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-02', 'phase-03'] pending_phases=['phase-04', 'phase-05'] completed_jobs=['blackscholes', 'streamcluster'] running_jobs=['parsec-canneal-2026-05-09-16h59m06s', 'parsec-freqmine-2026-05-09-16h59m06s']
+2026-05-09T15:02:54.959215+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-02', 'phase-03'] pending_phases=['phase-04', 'phase-05'] completed_jobs=['blackscholes', 'streamcluster'] running_jobs=['parsec-canneal-2026-05-09-16h59m06s', 'parsec-freqmine-2026-05-09-16h59m06s']
+2026-05-09T15:03:11.725670+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-02', 'phase-03'] pending_phases=['phase-04', 'phase-05'] completed_jobs=['blackscholes', 'streamcluster'] running_jobs=['parsec-canneal-2026-05-09-16h59m06s', 'parsec-freqmine-2026-05-09-16h59m06s']
+2026-05-09T15:03:17.159268+00:00 Job completed: parsec-canneal-2026-05-09-16h59m06s
+2026-05-09T15:03:17.159730+00:00 Phase dependency satisfied for phase-05: canneal
+2026-05-09T15:03:17.159942+00:00 Launching phase phase-05: barnes
+2026-05-09T15:03:27.847438+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-02', 'phase-03', 'phase-05'] pending_phases=['phase-04'] completed_jobs=['blackscholes', 'canneal', 'streamcluster'] running_jobs=['parsec-barnes-2026-05-09-16h59m06s', 'parsec-freqmine-2026-05-09-16h59m06s']
+2026-05-09T15:03:40.743242+00:00 Job completed: parsec-freqmine-2026-05-09-16h59m06s
+2026-05-09T15:03:40.743625+00:00 Phase dependency satisfied for phase-04: freqmine
+2026-05-09T15:03:40.743711+00:00 Launching phase phase-04: vips, radix
+2026-05-09T15:03:43.627300+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-02', 'phase-03', 'phase-04', 'phase-05'] pending_phases=[] completed_jobs=['blackscholes', 'canneal', 'freqmine', 'streamcluster'] running_jobs=['parsec-barnes-2026-05-09-16h59m06s', 'parsec-radix-2026-05-09-16h59m06s', 'parsec-vips-2026-05-09-16h59m06s']
+2026-05-09T15:03:58.667548+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-02', 'phase-03', 'phase-04', 'phase-05'] pending_phases=[] completed_jobs=['blackscholes', 'canneal', 'freqmine', 'streamcluster'] running_jobs=['parsec-barnes-2026-05-09-16h59m06s', 'parsec-radix-2026-05-09-16h59m06s', 'parsec-vips-2026-05-09-16h59m06s']
+2026-05-09T15:04:14.483604+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-02', 'phase-03', 'phase-04', 'phase-05'] pending_phases=[] completed_jobs=['blackscholes', 'canneal', 'freqmine', 'streamcluster'] running_jobs=['parsec-barnes-2026-05-09-16h59m06s', 'parsec-radix-2026-05-09-16h59m06s', 'parsec-vips-2026-05-09-16h59m06s']
+2026-05-09T15:04:15.879701+00:00 Job completed: parsec-vips-2026-05-09-16h59m06s
+2026-05-09T15:04:15.880028+00:00 Job completed: parsec-radix-2026-05-09-16h59m06s
+2026-05-09T15:04:25.615847+00:00 Job completed: parsec-barnes-2026-05-09-16h59m06s
+2026-05-09T15:04:25.616174+00:00 All batch jobs completed; capturing results.json and stopping mcperf
+2026-05-09T15:04:25.616235+00:00 Waiting briefly for final pod termination metadata
+2026-05-09T15:04:26.565481+00:00 Stopping mcperf measurement wrapper on client-measure-qsfk with SIGINT
+2026-05-09T15:04:39.490112+00:00 mcperf is still running on client-measure-qsfk after SIGINT; escalating to SIGTERM
+2026-05-09T15:04:43.280324+00:00 Summarizing run from captured pod snapshot and mcperf output
+2026-05-09T15:04:43.282063+00:00 Run completed with status pass makespan=230.0 max_p95_us=561.7
+2026-05-09T15:04:43.444607+00:00 Runtime stats refreshed: /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/runtime_stats.json samples=609 eligible_runs=87

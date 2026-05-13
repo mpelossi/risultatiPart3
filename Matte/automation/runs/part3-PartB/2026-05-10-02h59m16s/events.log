@@ -1,0 +1,11 @@
+2026-05-10T00:59:16.178250+00:00 Run directory prepared: /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/part3-PartB/2026-05-10-02h59m16s
+2026-05-10T00:59:16.178513+00:00 Rendered 8 manifests into /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/part3-PartB/2026-05-10-02h59m16s/rendered_manifests
+2026-05-10T00:59:16.178633+00:00 Cleaning previous managed workloads
+2026-05-10T00:59:50.035623+00:00 Ensuring canonical node labels and checking client provisioning
+2026-05-10T01:00:09.390500+00:00 Pre-caching 8 images on benchmark nodes via 2 transient pod(s)
+2026-05-10T01:00:13.964915+00:00 Pre-cache pods completed successfully
+2026-05-10T01:00:15.681722+00:00 Pre-cache pods deleted
+2026-05-10T01:00:15.682115+00:00 Applying memcached manifest
+2026-05-10T01:00:19.840442+00:00 Capturing benchmark node CPU platforms
+2026-05-10T01:00:26.424128+00:00 Benchmark node CPU platform capture complete: node-a-8core=e2-standard-8/AMD Rome, node-b-4core=n2d-highcpu-4/AMD Milan
+2026-05-10T01:00:26.424909+00:00 Restarting mcperf-agent.service on client-agent-a (client-agent-a-tp31)

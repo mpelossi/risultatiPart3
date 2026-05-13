@@ -1,58 +1,86 @@
-Project Path: automation
+Project Path: Matte
 
 Source Tree:
 
 ```txt
-automation
-├── README.md
-├── __init__.py
-├── audit.py
-├── catalog.py
-├── cli.py
-├── cluster.py
-├── collect.py
-├── config.py
-├── cpu_sets.py
-├── debug.py
-├── experiment.yaml
-├── export.py
-├── gui.py
-├── manifests.py
-├── metrics.py
-├── part3.yaml
-├── provision.py
-├── results.py
-├── runner.py
-├── runtime_stats.py
-├── schedule.yaml
-├── schedule_queue.yaml
-├── schedule_viewer_data.py
-├── tests
-│   ├── __init__.py
-│   ├── helpers.py
-│   ├── test_audit.py
-│   ├── test_cluster_labels.py
-│   ├── test_config.py
-│   ├── test_debug.py
-│   ├── test_export.py
-│   ├── test_live_integration.py
-│   ├── test_manifests.py
-│   ├── test_metrics.py
-│   ├── test_provision.py
-│   ├── test_queue.py
-│   ├── test_results.py
-│   ├── test_runner.py
-│   ├── test_runtime_stats.py
-│   ├── test_schedule_viewer.py
-│   └── test_viewer.py
-├── timing.py
-├── utils.py
-├── viewer.py
-└── viewer_data.py
+Matte
+└── automation
+    ├── README.md
+    ├── __init__.py
+    ├── audit.py
+    ├── catalog.py
+    ├── cli.py
+    ├── cluster.py
+    ├── collect.py
+    ├── config.py
+    ├── cpu_sets.py
+    ├── debug.py
+    ├── experiment.yaml
+    ├── experimentOPENEVOLVE.yaml
+    ├── export.py
+    ├── gui.py
+    ├── manifests.py
+    ├── metrics.py
+    ├── part3.yaml
+    ├── provision.py
+    ├── results.py
+    ├── runner.py
+    ├── runtime_stats.py
+    ├── schedule.yaml
+    ├── schedule_queue.yaml
+    ├── schedule_viewer_data.py
+    ├── schedules
+    │   ├── final1.yaml
+    │   ├── final2.yaml
+    │   ├── final3.yaml
+    │   ├── final4.yaml
+    │   ├── final5.yaml
+    │   ├── final6.yaml
+    │   ├── schedule1.yaml
+    │   ├── schedule2.yaml
+    │   ├── schedule2bis.yaml
+    │   ├── schedule3.yaml
+    │   ├── schedule4.yaml
+    │   ├── schedule5.yaml
+    │   ├── schedule5bis.yaml
+    │   ├── schedule6.yaml
+    │   ├── schedule6bis.yaml
+    │   ├── schedule7.yaml
+    │   ├── schedule7B.yaml
+    │   ├── schedule7B2.yaml
+    │   ├── schedule7bis.yaml
+    │   ├── schedule7bis3.yaml
+    │   ├── schedule7bisbis.yaml
+    │   ├── schedule8.yaml
+    │   ├── schedule8bis.yaml
+    │   ├── schedule8bisbis.yaml
+    │   └── schedule9.yaml
+    ├── tests
+    │   ├── __init__.py
+    │   ├── helpers.py
+    │   ├── test_audit.py
+    │   ├── test_cluster_labels.py
+    │   ├── test_config.py
+    │   ├── test_debug.py
+    │   ├── test_export.py
+    │   ├── test_live_integration.py
+    │   ├── test_manifests.py
+    │   ├── test_metrics.py
+    │   ├── test_provision.py
+    │   ├── test_queue.py
+    │   ├── test_results.py
+    │   ├── test_runner.py
+    │   ├── test_runtime_stats.py
+    │   ├── test_schedule_viewer.py
+    │   └── test_viewer.py
+    ├── timing.py
+    ├── utils.py
+    ├── viewer.py
+    └── viewer_data.py
 
 ```
 
-`README.md`:
+`automation/README.md`:
 
 ```md
 # Part 3 Automation
@@ -77,7 +105,24 @@ cd risultatiPart3/Matte/automation
 python3 cli.py cluster up --config experiment.yaml
 ```
 
-If `cluster up` fails or gets interrupted, clean up before retrying:
+If `cluster up` only fails during the final `kops validate cluster --wait 10m` step with
+`connect: connection refused`, `i/o timeout`, or `TLS handshake timeout`, first give the
+API server more time:
+
+```bash
+export KOPS_STATE_STORE=gs://cca-eth-2026-group-54-mpelossi
+kops validate cluster --name part3.k8s.local --wait 20m
+```
+
+If that succeeds, finish the automation step once so kubeconfig is exported and the nodes
+get the expected labels:
+
+```bash
+python3 cli.py cluster up --config experiment.yaml
+```
+
+If validation still cannot reach the API server, or `cluster up` failed before validation,
+clean up before retrying:
 
 ```bash
 python3 cli.py cluster down --config experiment.yaml
@@ -140,27 +185,38 @@ python3 gui.py --policy other-schedule.yaml --times-csv /path/to/Part2summary_ti
 python3 cli.py run once --config experiment.yaml --policy schedule.yaml --dry-run
 ```
 
-### 6. Run one real experiment
+### 6. Warm images without a measurement run
 
 ```bash
-python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache
+python3 cli.py run precache --config experiment.yaml --policy schedule.yaml
 ```
 
-`--precache` is recommended before serious benchmark runs. It warms all benchmark and
-memcached images on both benchmark nodes so the measured run does not spend time pulling
-containers.
+This creates transient pre-cache pods on both benchmark nodes, waits for all benchmark
+and memcached images to be present, deletes those pods, and exits before launching
+memcached, `mcperf`, or benchmark jobs. Artifacts are written under
+`runs/__precache/<experiment_id>/<timestamp>` so they do not appear as benchmark runs.
 
-After the first warm run on an unchanged cluster, repeating `run once --precache` is safe
+### 7. Run one real experiment
+
+```bash
+python3 cli.py run once --config experiment.yaml --policy schedule.yaml
+```
+
+Use `--precache` here only when you want the real run itself to do the warmup first.
+If you already ran `run precache` on an unchanged cluster, omit `--precache` so the
+measurement starts sooner.
+
+After the first warmup on an unchanged cluster, repeating `run once --precache` is safe
 but usually optional because the images should already be present. For `run batch
 --precache`, the automation warms images once before the first repetition only.
 
-### 7. Run three repetitions
+### 8. Run three repetitions
 
 ```bash
 python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache
 ```
 
-### 7b. Run multiple schedules as a queue
+### 8b. Run multiple schedules as a queue
 
 Create a queue file such as:
 
@@ -185,7 +241,7 @@ Each `policy` path is resolved relative to the queue file. `runs: 1` behaves lik
 `run once`; larger values behave like `run batch`. With `--precache`, images are warmed
 only before the first real queued run.
 
-### 7c. Rebuild runtime stats from saved runs
+### 8c. Rebuild runtime stats from saved runs
 
 Real runs refresh `runs/runtime_stats.json` automatically. If you want to backfill from
 old runs, or you edited/copied run artifacts by hand, rebuild it explicitly:
@@ -298,8 +354,26 @@ This does the full bring-up flow:
 
 You do **not** need to run this before every experiment.
 
-If `cluster up` fails or is interrupted, do **not** immediately retry it on top of the
-half-finished state. Run:
+If `cluster up` fails only at `kops validate cluster --wait 10m`, do **not** delete the
+cluster immediately. The control-plane VM can exist before the Kubernetes API server is
+ready, which shows up as errors like `connect: connection refused`, `i/o timeout`, or
+`TLS handshake timeout`. Try a longer standalone validation first:
+
+```bash
+export KOPS_STATE_STORE=gs://cca-eth-2026-group-54-mpelossi
+kops validate cluster --name part3.k8s.local --wait 20m
+```
+
+If that succeeds, run the automation command again once:
+
+```bash
+python3 cli.py cluster up --config experiment.yaml
+```
+
+The second run should pass validation quickly, export kubeconfig, and label the nodes.
+
+If validation still cannot reach the API server after the longer wait, or if `cluster up`
+failed before the validation phase, clean up before retrying:
 
 ```bash
 python3 cli.py cluster down --config experiment.yaml
@@ -399,26 +473,45 @@ python3 cli.py run once --config experiment.yaml --policy schedule.yaml --dry-ru
 
 This renders manifests and writes the phase plan, but does not touch the live cluster.
 
-### Step 6. Real run
+### Step 6. Pre-cache images without measuring
 
 Run:
 
 ```bash
-python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache
+python3 cli.py run precache --config experiment.yaml --policy schedule.yaml
 ```
 
 This:
 - cleans previous managed jobs and pods
 - checks client provisioning
-- optionally pre-pulls all benchmark images on both benchmark nodes
+- creates transient pre-cache pods on both benchmark nodes
+- waits for all benchmark and memcached images to be present
+- deletes the pre-cache pods
+- writes `precache.json` and `events.log` under `runs/__precache/<experiment_id>/<timestamp>`
+
+It does not launch memcached, start `mcperf`, run benchmark jobs, capture `results.json`,
+or refresh runtime stats.
+
+### Step 7. Real run
+
+Run:
+
+```bash
+python3 cli.py run once --config experiment.yaml --policy schedule.yaml
+```
+
+This:
+- cleans previous managed jobs and pods
+- checks client provisioning
 - launches memcached
 - starts the `mcperf` measurement
 - launches the batch phases in schedule order
 - stops `mcperf` when the last batch job completes
 - captures `results.json`, `mcperf.txt`, and `summary.json`
 
-`--precache` is recommended for serious timing runs. It warms the images once and then
-deletes the transient warmup pods before memcached and the benchmark jobs start.
+For serious timing runs, either run the standalone pre-cache command first or pass
+`--precache` to this command. The standalone command is useful when you want to warm
+images once without spending time or credits on a full measurement run.
 
 `results.json` is the raw `kubectl get pods -o json` snapshot that matches the assignment
 workflow. `summary.json` is a derived convenience report built from `results.json` and
@@ -433,15 +526,15 @@ file stores per-job observed runtimes grouped by job, node, thread count, and me
 placement. Refresh failure is logged as a warning and does not mark the benchmark run as
 failed.
 
-If you already warmed the images on this cluster, you may omit `--precache` on later
-single runs. Re-running it is not harmful; it just creates short-lived image-warmup pods
-and deletes them before memcached starts.
+If you already warmed the images on this cluster, omit `--precache` on later single runs.
+Re-running pre-cache is not harmful; it just creates short-lived image-warmup pods and
+deletes them before memcached starts.
 
 When the run stops measurement, the signal is sent only to the temporary `mcperf` wrapper on
 `client-measure`. It does not target the memcached pod or the long-lived
 `mcperf-agent.service` processes on `client-agent-a` / `client-agent-b`.
 
-### Step 7. Repeated runs
+### Step 8. Repeated runs
 
 Run:
 
@@ -452,7 +545,7 @@ python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 
 Use this when you want the three measurement files needed for submission. With `--precache`,
 the warmup happens once before the first run only.
 
-### Step 8. Pick the best run
+### Step 9. Pick the best run
 
 If this checkout already contains run artifacts, or you copied run folders in manually,
 first rebuild the run-derived runtime statistics:
@@ -481,7 +574,7 @@ This sorts the runs by:
 By default it reads from this automation directory's own `runs/` folder, so you usually do
 not need to pass `--results-root`.
 
-### Step 9. Export the submission folder
+### Step 10. Export the submission folder
 
 Run:
 
@@ -528,9 +621,14 @@ Opens the Tkinter planner GUI for the current schedule. From inside this directo
 
 Builds the manifests and phase plan without touching the cluster.
 
+### `python3 cli.py run precache --config experiment.yaml --policy schedule.yaml`
+
+Warms benchmark and memcached images on both benchmark nodes, then exits without a
+measurement run. Writes artifacts under `runs/__precache/...`.
+
 ### `python3 cli.py run once --config experiment.yaml --policy schedule.yaml --precache`
 
-Runs one full live experiment. `--precache` is recommended.
+Runs one full live experiment and performs the image warmup before memcached starts.
 
 ### `python3 cli.py run batch --config experiment.yaml --policy schedule.yaml --runs 3 --precache`
 
@@ -593,7 +691,34 @@ If the cluster already exists and you only need kubeconfig:
 kops export kubecfg --admin --name part3.k8s.local
 ```
 
-### `cluster up` failed halfway through
+### `cluster up` timed out in `kops validate cluster`
+
+If the failure is only:
+
+```text
+error listing nodes: Get "https://.../api/v1/nodes": connect: connection refused
+validation failed: wait time exceeded during validation
+```
+
+try validation once more before deleting the cluster:
+
+```bash
+export KOPS_STATE_STORE=gs://cca-eth-2026-group-54-mpelossi
+kops validate cluster --name part3.k8s.local --wait 20m
+```
+
+If this succeeds, finish the normal setup path:
+
+```bash
+python3 cli.py cluster up --config experiment.yaml
+python3 cli.py provision check --config experiment.yaml
+```
+
+Use `cluster down` only if the longer validation still cannot reach the API server, if
+`../../checkCredits.sh` shows broken leftover network artifacts, or if the bring-up failed
+before the validation phase.
+
+### `cluster up` failed before validation or still cannot validate
 
 Clean up first:
 
@@ -673,7 +798,7 @@ a desktop session or use X11 forwarding.
 
 ```
 
-`__init__.py`:
+`automation/__init__.py`:
 
 ```py
 """Automation framework for Part 3 experiments."""
@@ -681,7 +806,7 @@ a desktop session or use X11 forwarding.
 
 ```
 
-`audit.py`:
+`automation/audit.py`:
 
 ```py
 from __future__ import annotations
@@ -1441,7 +1566,7 @@ def render_audit_report(report: AuditReport) -> str:
 
 ```
 
-`catalog.py`:
+`automation/catalog.py`:
 
 ```py
 from __future__ import annotations
@@ -1574,7 +1699,7 @@ JOB_CATALOG: dict[str, JobCatalogEntry] = {
 
 ```
 
-`cli.py`:
+`automation/cli.py`:
 
 ```py
 from __future__ import annotations
@@ -1667,6 +1792,9 @@ def _build_parser() -> argparse.ArgumentParser:
     run_once.add_argument("--policy", required=True)
     run_once.add_argument("--dry-run", action="store_true")
     run_once.add_argument("--precache", action="store_true")
+    run_precache = run_sub.add_parser("precache")
+    run_precache.add_argument("--config", required=True)
+    run_precache.add_argument("--policy", required=True)
     run_batch = run_sub.add_parser("batch")
     run_batch.add_argument("--config", required=True)
     run_batch.add_argument("--policy", required=True)
@@ -1783,7 +1911,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run":
-        if args.dry_run and args.precache:
+        if getattr(args, "dry_run", False) and getattr(args, "precache", False):
             parser.error("--precache cannot be combined with --dry-run")
         experiment = load_experiment_config(args.config)
         if args.run_command == "queue":
@@ -1796,6 +1924,9 @@ def main(argv: list[str] | None = None) -> int:
         runner = ExperimentRunner(experiment, policy)
         if args.run_command == "once":
             run_dir = runner.run_once(dry_run=args.dry_run, precache=args.precache)
+            print(run_dir)
+        elif args.run_command == "precache":
+            run_dir = runner.precache_once()
             print(run_dir)
         else:
             run_dirs = runner.run_batch(args.runs, dry_run=args.dry_run, precache=args.precache)
@@ -1927,7 +2058,7 @@ if __name__ == "__main__":
 
 ```
 
-`cluster.py`:
+`automation/cluster.py`:
 
 ```py
 from __future__ import annotations
@@ -2555,7 +2686,7 @@ class ClusterController:
 
 ```
 
-`collect.py`:
+`automation/collect.py`:
 
 ```py
 from __future__ import annotations
@@ -2612,7 +2743,7 @@ def collect_describes(
 
 ```
 
-`config.py`:
+`automation/config.py`:
 
 ```py
 from __future__ import annotations
@@ -3026,7 +3157,7 @@ def load_run_queue_config(path_str: str) -> RunQueueConfig:
 
 ```
 
-`cpu_sets.py`:
+`automation/cpu_sets.py`:
 
 ```py
 from __future__ import annotations
@@ -3098,7 +3229,7 @@ def contiguous_core_sets(core_count: int) -> tuple[str, ...]:
 
 ```
 
-`debug.py`:
+`automation/debug.py`:
 
 ```py
 from __future__ import annotations
@@ -3325,7 +3456,7 @@ def render_debug_commands(
 
 ```
 
-`experiment.yaml`:
+`automation/experiment.yaml`:
 
 ```yaml
 {
@@ -3357,7 +3488,39 @@ def render_debug_commands(
 
 ```
 
-`export.py`:
+`automation/experimentOPENEVOLVE.yaml`:
+
+```yaml
+{
+  "experiment_id": "part3-OPENEVOLVE_GLM5.1",
+  "cluster_name": "part3.k8s.local",
+  "zone": "europe-west1-b",
+  "kops_state_store": "gs://cca-eth-2026-group-54-mpelossi",
+  "ssh_key_path": "~/.ssh/cloud-computing",
+  "ssh_user": "ubuntu",
+  "cluster_config_path": "part3.yaml",
+  "results_root": "runs",
+  "submission_group": "054",
+  "memcached_name": "some-memcached",
+  "remote_repo_dir": "/opt/cca/memcache-perf-dynamic",
+  "mcperf_measurement": {
+    "agent_a_threads": 2,
+    "agent_b_threads": 4,
+    "measure_threads": 6,
+    "connections": 4,
+    "depth": 4,
+    "qps_interval": 1000,
+    "scan_start": 30000,
+    "scan_stop": 30500,
+    "scan_step": 5,
+    "max_start_wait_s": 180,
+    "completion_timeout_s": 3600
+  }
+}
+
+```
+
+`automation/export.py`:
 
 ```py
 from __future__ import annotations
@@ -3411,7 +3574,7 @@ def export_submission(
 
 ```
 
-`gui.py`:
+`automation/gui.py`:
 
 ```py
 from __future__ import annotations
@@ -3939,7 +4102,7 @@ if __name__ == "__main__":
 
 ```
 
-`manifests.py`:
+`automation/manifests.py`:
 
 ```py
 from __future__ import annotations
@@ -4166,7 +4329,7 @@ spec:
 
 ```
 
-`metrics.py`:
+`automation/metrics.py`:
 
 ```py
 from __future__ import annotations
@@ -4360,7 +4523,7 @@ def build_summary(
 
 ```
 
-`part3.yaml`:
+`automation/part3.yaml`:
 
 ```yaml
 apiVersion: kops.k8s.io/v1alpha2
@@ -4780,7 +4943,7 @@ spec:
 
 ```
 
-`provision.py`:
+`automation/provision.py`:
 
 ```py
 from __future__ import annotations
@@ -4915,7 +5078,7 @@ def assert_client_provisioning(cluster: ClusterController) -> dict[str, Provisio
 
 ```
 
-`results.py`:
+`automation/results.py`:
 
 ```py
 from __future__ import annotations
@@ -5001,7 +5164,7 @@ def sort_best_runs(summaries: list[dict[str, object]]) -> list[dict[str, object]
 
 ```
 
-`runner.py`:
+`automation/runner.py`:
 
 ```py
 from __future__ import annotations
@@ -5077,6 +5240,20 @@ class ExperimentRunner:
         manifests_dir = ensure_directory(run_dir / "rendered_manifests")
         return run_id, run_dir, manifests_dir
 
+    def _create_precache_dir(self) -> tuple[str, Path, Path]:
+        precache_root = ensure_directory(self.experiment.results_root / "__precache" / self.experiment.experiment_id)
+        base_run_id = run_id_timestamp()
+        run_id = base_run_id
+        suffix = 2
+        precache_dir = precache_root / run_id
+        while precache_dir.exists():
+            run_id = f"{base_run_id}-{suffix:02d}"
+            precache_dir = precache_root / run_id
+            suffix += 1
+        precache_dir = ensure_directory(precache_dir)
+        manifests_dir = ensure_directory(precache_dir / "rendered_manifests")
+        return run_id, precache_dir, manifests_dir
+
     def _log(self, log_path: Path, message: str) -> None:
         append_log(log_path, message)
         print(message)
@@ -5087,6 +5264,39 @@ class ExperimentRunner:
     def _write_policy_snapshot(self, run_dir: Path) -> None:
         shutil.copyfile(self.experiment.config_path, run_dir / "experiment.yaml")
         shutil.copyfile(self.policy.config_path, run_dir / "policy.yaml")
+
+    def _prepare_live_cluster(self, *, log_path: Path, run_id: str) -> None:
+        self._log(log_path, "Cleaning previous managed workloads")
+        self.cluster.cleanup_managed_workloads()
+        self._log(log_path, "Ensuring canonical node labels and checking client provisioning")
+        try:
+            assert_client_provisioning(self.cluster)
+        except ProvisioningError as exc:
+            for status in exc.statuses.values():
+                self._log(log_path, str(status))
+            for hint in summarize_provisioning_hints(exc.statuses):
+                self._log(log_path, f"Hint: {hint}")
+            self._log(
+                log_path,
+                "Debug commands: "
+                + format_debug_command_hint(
+                    config_path=self.experiment.config_path,
+                    policy_path=self.policy.config_path,
+                    run_id=run_id,
+                ),
+            )
+            raise
+        except RuntimeError:
+            self._log(
+                log_path,
+                "Debug commands: "
+                + format_debug_command_hint(
+                    config_path=self.experiment.config_path,
+                    policy_path=self.policy.config_path,
+                    run_id=run_id,
+                ),
+            )
+            raise
 
     def _render_manifests(
         self,
@@ -5798,37 +6008,7 @@ class ExperimentRunner:
             self._log(log_path, f"Dry run prepared at {run_dir}")
             return run_dir
 
-        self._log(log_path, "Cleaning previous managed workloads")
-        self.cluster.cleanup_managed_workloads()
-        self._log(log_path, "Ensuring canonical node labels and checking client provisioning")
-        try:
-            assert_client_provisioning(self.cluster)
-        except ProvisioningError as exc:
-            for status in exc.statuses.values():
-                self._log(log_path, str(status))
-            for hint in summarize_provisioning_hints(exc.statuses):
-                self._log(log_path, f"Hint: {hint}")
-            self._log(
-                log_path,
-                "Debug commands: "
-                + format_debug_command_hint(
-                    config_path=self.experiment.config_path,
-                    policy_path=self.policy.config_path,
-                    run_id=run_id,
-                ),
-            )
-            raise
-        except RuntimeError:
-            self._log(
-                log_path,
-                "Debug commands: "
-                + format_debug_command_hint(
-                    config_path=self.experiment.config_path,
-                    policy_path=self.policy.config_path,
-                    run_id=run_id,
-                ),
-            )
-            raise
+        self._prepare_live_cluster(log_path=log_path, run_id=run_id)
 
         if precache:
             self._precache_images(run_id=run_id, manifests_dir=manifests_dir, log_path=log_path)
@@ -5905,6 +6085,41 @@ class ExperimentRunner:
         self._refresh_runtime_stats(log_path=log_path)
         return run_dir
 
+    def precache_once(self) -> Path:
+        run_id, precache_dir, manifests_dir = self._create_precache_dir()
+        log_path = precache_dir / "events.log"
+        precache_pods = resolve_precache_pods(run_id)
+        pod_names = [pod.kubernetes_name for pod in precache_pods]
+        image_count = len(precache_pods[0].images) if precache_pods else 0
+        status: dict[str, object] = {
+            "experiment_id": self.experiment.experiment_id,
+            "image_count": image_count,
+            "pod_names": pod_names,
+            "policy_name": self.policy.policy_name,
+            "run_id": run_id,
+            "status": "running",
+        }
+
+        self._log_run_prefix(run_id, f"Preparing pre-cache in {precache_dir}")
+        self._write_policy_snapshot(precache_dir)
+        write_json(precache_dir / "precache.json", status)
+        self._log(log_path, f"Pre-cache directory prepared: {precache_dir}")
+
+        try:
+            self._prepare_live_cluster(log_path=log_path, run_id=run_id)
+            self._precache_images(run_id=run_id, manifests_dir=manifests_dir, log_path=log_path)
+        except Exception as exc:
+            status["status"] = "failed"
+            status["error"] = str(exc)
+            write_json(precache_dir / "precache.json", status)
+            self._log(log_path, f"Pre-cache only run failed: {exc}")
+            raise
+
+        status["status"] = "success"
+        write_json(precache_dir / "precache.json", status)
+        self._log(log_path, "Pre-cache only run completed successfully")
+        return precache_dir
+
     def run_batch(self, runs: int, *, dry_run: bool = False, precache: bool = False) -> list[Path]:
         if dry_run and precache:
             raise ValueError("--precache cannot be combined with --dry-run")
@@ -5956,7 +6171,7 @@ def run_policy_queue(
 
 ```
 
-`runtime_stats.py`:
+`automation/runtime_stats.py`:
 
 ```py
 from __future__ import annotations
@@ -6372,7 +6587,7 @@ def _string_or_none(value: Any) -> str | None:
 
 ```
 
-`schedule.yaml`:
+`automation/schedule.yaml`:
 
 ```yaml
 policy_name: "ultimate-6-2-split"
@@ -6421,7 +6636,7 @@ jobs:
     after: "canneal"
 ```
 
-`schedule_queue.yaml`:
+`automation/schedule_queue.yaml`:
 
 ```yaml
 queue_name: "part3-candidates"
@@ -6460,7 +6675,7 @@ entries:
     runs: 2
 ```
 
-`schedule_viewer_data.py`:
+`automation/schedule_viewer_data.py`:
 
 ```py
 from __future__ import annotations
@@ -7024,7 +7239,1259 @@ def _yaml_after(dependencies: tuple[str, ...]) -> str:
 
 ```
 
-`tests/__init__.py`:
+`automation/schedules/final1.yaml`:
+
+```yaml
+policy_name: "split-brain-var1"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  vips:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+    
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  barnes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "barnes"
+```
+
+`automation/schedules/final2.yaml`:
+
+```yaml
+policy_name: "split-brain-var6"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "barnes"
+    
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  vips:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "vips"
+```
+
+`automation/schedules/final3.yaml`:
+
+```yaml
+policy_name: "split-brain-var5"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+    
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  vips:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "vips"
+```
+
+`automation/schedules/final4.yaml`:
+
+```yaml
+policy_name: "split-brain-var4"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  vips:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "vips"
+    
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  blackscholes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "blackscholes"
+```
+
+`automation/schedules/final5.yaml`:
+
+```yaml
+policy_name: "split-brain-var3"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  vips:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "barnes"
+    
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  blackscholes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "blackscholes"
+```
+
+`automation/schedules/final6.yaml`:
+
+```yaml
+policy_name: "split-brain-var2"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  vips:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "vips"
+    
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  barnes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "barnes"
+```
+
+`automation/schedules/schedule1.yaml`:
+
+```yaml
+policy_name: "6vips-2radix-1-barnesOnB"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+    
+  freqmine:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "streamcluster"
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+    
+  vips:
+    node: "node-a-8core"
+    cores: "0-5"
+    threads: 6
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "6-7"
+    threads: 2
+    after: "freqmine"
+    
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+```
+
+`automation/schedules/schedule2.yaml`:
+
+```yaml
+policy_name: "6barnes-2radix-1-vipsOnB"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+    
+  freqmine:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "streamcluster"
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+    
+  barnes:
+    node: "node-a-8core"
+    cores: "0-5"
+    threads: 6
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "6-7"
+    threads: 2
+    after: "freqmine"
+    
+  vips:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+```
+
+`automation/schedules/schedule2bis.yaml`:
+
+```yaml
+policy_name: "7barnes-1radix-1-vipsOnB"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+    
+  freqmine:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "streamcluster"
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+    
+  barnes:
+    node: "node-a-8core"
+    cores: "0-6"
+    threads: 7
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "7"
+    threads: 1
+    after: "freqmine"
+    
+  vips:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+```
+
+`automation/schedules/schedule3.yaml`:
+
+```yaml
+policy_name: "golden-memB-perfect"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE B PIPELINE (3 Cores) ---
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+    
+  # --- NODE A PIPELINE (8 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "streamcluster"
+    
+  # Concurrent block on Node A
+  vips:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+```
+
+`automation/schedules/schedule4.yaml`:
+
+```yaml
+policy_name: "safe-memB-3way-concurrent"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "streamcluster"
+  # --- CONCURRENT BLOCK ON NODE A ---
+  barnes:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "freqmine"
+  vips:
+    node: "node-a-8core"
+    cores: "4-6"
+    threads: 3
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "7"
+    threads: 1
+    after: "freqmine"
+    
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+    
+```
+
+`automation/schedules/schedule5.yaml`:
+
+```yaml
+policy_name: "memA-max-parallel"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE B PIPELINE (4 Cores, super fast) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "canneal"
+  barnes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "blackscholes"
+
+  # --- NODE A PIPELINE (7 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+
+  # Concurrent block on Node A
+  vips:
+    node: "node-a-8core"
+    cores: "1-5"
+    threads: 5
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "6-7"
+    threads: 2
+    after: "freqmine"
+```
+
+`automation/schedules/schedule5bis.yaml`:
+
+```yaml
+policy_name: "memA-max-parallel-bis"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE B PIPELINE (4 Cores) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "canneal"
+  barnes:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "blackscholes"
+  vips:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: "barnes"
+
+  # --- NODE A PIPELINE (7 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+  radix:
+    node: "node-a-8core"
+    cores: "1-4"
+    threads: 4 # Power of 2, safe on Node A
+    after: "freqmine"
+```
+
+`automation/schedules/schedule6.yaml`:
+
+```yaml
+policy_name: "memA-dual-pipe-NodeB"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE A (7 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+  radix:
+    node: "node-a-8core"
+    cores: "1-4"
+    threads: 4
+    after: "freqmine"
+
+  # --- NODE B PIPELINE 1 (Cores 0-1) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "start"
+
+  # --- NODE B PIPELINE 2 (Cores 2-3) ---
+  barnes:
+    node: "node-b-4core"
+    cores: "2-3"
+    threads: 2
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "2-3"
+    threads: 2
+    after: "barnes"
+  vips:
+    node: "node-b-4core"
+    cores: "2-3"
+    threads: 2
+    after: "blackscholes"
+```
+
+`automation/schedules/schedule6bis.yaml`:
+
+```yaml
+policy_name: "memA-dual-pipe-NodeB"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE A (7 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+  radix:
+    node: "node-a-8core"
+    cores: "1-4"
+    threads: 4
+    after: "freqmine"
+
+  # --- NODE B PIPELINE 1 (Cores 0-1) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "start"
+
+  # --- NODE B PIPELINE 2 (Cores 2-3) ---
+  barnes:
+    node: "node-b-4core"
+    cores: "2-3"
+    threads: 2
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "2-3"
+    threads: 2
+    after: "barnes"
+  vips:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "canneal"
+```
+
+`automation/schedules/schedule7.yaml`:
+
+```yaml
+policy_name: "split-brain-NodeA"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE B (3 Cores) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+
+  # --- NODE A PIPELINE 1 (Cores 0-3) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  vips:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "streamcluster"
+
+  # --- NODE A PIPELINE 2 (Cores 4-7) ---
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+```
+
+`automation/schedules/schedule7B.yaml`:
+
+```yaml
+policy_name: "split-brain-NodeA"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "blackscholes"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  vips:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  blackscholes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "vips"
+
+```
+
+`automation/schedules/schedule7B2.yaml`:
+
+```yaml
+policy_name: "split-brain-NodeA"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  vips:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "barnes"
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "blackscholes"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+
+  blackscholes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+
+```
+
+`automation/schedules/schedule7bis.yaml`:
+
+```yaml
+policy_name: "split-brain-NodeA"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE B (3 Cores) ---
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+
+  barnes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+
+  # --- NODE A PIPELINE 1 (Cores 0-3) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  radix:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "streamcluster"
+
+  # --- NODE A PIPELINE 2 (Cores 4-7) ---
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  vips:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  blackscholes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "vips"
+```
+
+`automation/schedules/schedule7bis3.yaml`:
+
+```yaml
+policy_name: "split-brain-NodeA"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  vips:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "blackscholes"
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "barnes"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  barnes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+
+```
+
+`automation/schedules/schedule7bisbis.yaml`:
+
+```yaml
+policy_name: "split-brain-NodeA"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  canneal:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "start"
+  blackscholes:
+    node: "node-b-4core"
+    cores: "1-3"
+    threads: 3
+    after: "canneal"
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-3"
+    threads: 4
+    after: "start"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "barnes"
+  freqmine:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "start"
+  vips:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+  barnes:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "vips"
+
+```
+
+`automation/schedules/schedule8.yaml`:
+
+```yaml
+policy_name: "memA-the-grid-fragmentation"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE A ---
+  radix:
+    node: "node-a-8core"
+    cores: "7"
+    threads: 1
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-6"
+    threads: 6
+    after: "start"
+
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "freqmine"
+
+  # --- NODE B ---
+  # Pipe 1 (Cores 0-1)
+  canneal:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "start"
+    
+  # Pipe 2 (Core 2)
+  barnes:
+    node: "node-b-4core"
+    cores: "2"
+    threads: 1
+    after: "start"
+
+    
+  # Pipe 3 (Core 3)
+  vips:
+    node: "node-b-4core"
+    cores: "3"
+    threads: 1
+    after: "start"
+
+
+        #BARNES FINISHES AFTER VIPS BUT BEFORE CANNEAL
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0-1"
+    threads: 2
+    after: "barnes"
+```
+
+`automation/schedules/schedule8bis.yaml`:
+
+```yaml
+policy_name: "memA-the-grid-fragmentation"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE A ---
+  radix:
+    node: "node-a-8core"
+    cores: "0"
+    threads: 1
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "freqmine"
+
+  # --- NODE B ---
+  # Pipe 1 (Cores 0-1)
+  canneal:
+    node: "node-b-4core"
+    cores: "1"
+    threads: 1
+    after: "start"
+    
+  # Pipe 2 (Core 2)
+  barnes:
+    node: "node-b-4core"
+    cores: "2"
+    threads: 1
+    after: "start"
+
+    
+  # Pipe 3 (Core 3)
+  vips:
+    node: "node-b-4core"
+    cores: "3"
+    threads: 1
+    after: "start"
+
+
+        #canneal FINISHES AFTER VIPS BUT BEFORE barnes
+  blackscholes:
+    node: "node-b-4core"
+    cores: "3"
+    threads: 1
+    after: "vips"
+```
+
+`automation/schedules/schedule8bisbis.yaml`:
+
+```yaml
+policy_name: "memA-the-grid-fragmentation"
+memcached:
+  node: "node-b-4core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE A ---
+  freqmine:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "start"
+
+  streamcluster:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "freqmine"
+  radix:
+    node: "node-a-8core"
+    cores: "0-7"
+    threads: 8
+    after: "streamcluster"
+
+  # --- NODE B ---
+  # Pipe 1 (Cores 0-1)
+  canneal:
+    node: "node-b-4core"
+    cores: "1"
+    threads: 1
+    after: "start"
+    
+  # Pipe 2 (Core 2)
+  barnes:
+    node: "node-b-4core"
+    cores: "2"
+    threads: 1
+    after: "start"
+
+    
+  # Pipe 3 (Core 3)
+  vips:
+    node: "node-b-4core"
+    cores: "3"
+    threads: 1
+    after: "start"
+
+
+        #canneal FINISHES AFTER VIPS BUT BEFORE barnes
+  blackscholes:
+    node: "node-b-4core"
+    cores: "3"
+    threads: 1
+    after: "vips"
+```
+
+`automation/schedules/schedule9.yaml`:
+
+```yaml
+policy_name: "memA-3way-NodeB"
+memcached:
+  node: "node-a-8core"
+  cores: "0"
+  threads: 1
+jobs:
+  # --- NODE A (7 Cores) ---
+  streamcluster:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "start"
+  freqmine:
+    node: "node-a-8core"
+    cores: "1-7"
+    threads: 7
+    after: "streamcluster"
+  radix:
+    node: "node-a-8core"
+    cores: "4-7"
+    threads: 4
+    after: "freqmine"
+
+  # --- NODE B (4 Cores available) ---
+  # Phase 1: 3 jobs concurrently
+  blackscholes:
+    node: "node-b-4core"
+    cores: "0"
+    threads: 1
+    after: "start"
+  vips:
+    node: "node-b-4core"
+    cores: "1"
+    threads: 1
+    after: "start"
+  barnes:
+    node: "node-b-4core"
+    cores: "2-3"
+    threads: 2 
+    after: "start"
+    
+  # Phase 2: Sequential finish
+  canneal:
+    node: "node-b-4core"
+    cores: "0-3"
+    threads: 4
+    after: ["blackscholes", "barnes", "vips"] # Waits for the longest job (blackscholes takes ~131s on 1 core)
+```
+
+`automation/tests/__init__.py`:
 
 ```py
 """Unit and opt-in integration tests for the Part 3 framework."""
@@ -7032,7 +8499,7 @@ def _yaml_after(dependencies: tuple[str, ...]) -> str:
 
 ```
 
-`tests/helpers.py`:
+`automation/tests/helpers.py`:
 
 ```py
 from __future__ import annotations
@@ -7052,7 +8519,7 @@ def temp_workspace() -> TemporaryDirectory[str]:
 
 ```
 
-`tests/test_audit.py`:
+`automation/tests/test_audit.py`:
 
 ```py
 from __future__ import annotations
@@ -7285,7 +8752,7 @@ class PlannerRoundTripTests(unittest.TestCase):
 
 ```
 
-`tests/test_cluster_labels.py`:
+`automation/tests/test_cluster_labels.py`:
 
 ```py
 from __future__ import annotations
@@ -7573,7 +9040,7 @@ if __name__ == "__main__":
 
 ```
 
-`tests/test_config.py`:
+`automation/tests/test_config.py`:
 
 ```py
 from __future__ import annotations
@@ -8013,7 +9480,7 @@ class ConfigTests(unittest.TestCase):
 
 ```
 
-`tests/test_debug.py`:
+`automation/tests/test_debug.py`:
 
 ```py
 from __future__ import annotations
@@ -8363,6 +9830,39 @@ class FailureSurfaceTests(unittest.TestCase):
         runner_cls.return_value.run_once.assert_called_once_with(dry_run=False, precache=True)
         self.assertEqual(output.getvalue().strip(), "/tmp/run")
 
+    def test_run_cli_precache_dispatches_to_precache_once(self) -> None:
+        experiment = _experiment_config()
+        policy = PolicyConfig(
+            config_path=Path("/tmp/policy.yaml"),
+            policy_name="test-policy",
+            memcached=MemcachedConfig(node="node-b-4core", cores="0", threads=1),
+            job_overrides={},
+            phases=[],
+        )
+        output = io.StringIO()
+
+        with patch("Matte.automation.cli.load_experiment_config", return_value=experiment), patch(
+            "Matte.automation.cli.load_policy_config",
+            return_value=policy,
+        ), patch("Matte.automation.cli.ExperimentRunner") as runner_cls:
+            runner_cls.return_value.precache_once.return_value = Path("/tmp/precache")
+            with redirect_stdout(output):
+                cli.main(
+                    [
+                        "run",
+                        "precache",
+                        "--config",
+                        "experiment.yaml",
+                        "--policy",
+                        "policy.yaml",
+                    ]
+                )
+
+        runner_cls.return_value.precache_once.assert_called_once_with()
+        runner_cls.return_value.run_once.assert_not_called()
+        runner_cls.return_value.run_batch.assert_not_called()
+        self.assertEqual(output.getvalue().strip(), "/tmp/precache")
+
 
 class BootstrapScriptTests(unittest.TestCase):
     def test_all_client_bootstrap_scripts_share_the_new_dependency_helper(self) -> None:
@@ -8378,7 +9878,7 @@ if __name__ == "__main__":
 
 ```
 
-`tests/test_export.py`:
+`automation/tests/test_export.py`:
 
 ```py
 from __future__ import annotations
@@ -8447,7 +9947,7 @@ class ExportTests(unittest.TestCase):
 
 ```
 
-`tests/test_live_integration.py`:
+`automation/tests/test_live_integration.py`:
 
 ```py
 from __future__ import annotations
@@ -8464,7 +9964,7 @@ class LiveIntegrationTests(unittest.TestCase):
 
 ```
 
-`tests/test_manifests.py`:
+`automation/tests/test_manifests.py`:
 
 ```py
 from __future__ import annotations
@@ -8495,7 +9995,7 @@ class ManifestTests(unittest.TestCase):
 
 ```
 
-`tests/test_metrics.py`:
+`automation/tests/test_metrics.py`:
 
 ```py
 from __future__ import annotations
@@ -8571,7 +10071,7 @@ class MetricsTests(unittest.TestCase):
 
 ```
 
-`tests/test_provision.py`:
+`automation/tests/test_provision.py`:
 
 ```py
 from __future__ import annotations
@@ -8638,7 +10138,7 @@ if __name__ == "__main__":
 
 ```
 
-`tests/test_queue.py`:
+`automation/tests/test_queue.py`:
 
 ```py
 from __future__ import annotations
@@ -8788,7 +10288,7 @@ if __name__ == "__main__":
 
 ```
 
-`tests/test_results.py`:
+`automation/tests/test_results.py`:
 
 ```py
 from __future__ import annotations
@@ -8885,7 +10385,7 @@ class ResultsTests(unittest.TestCase):
 
 ```
 
-`tests/test_runner.py`:
+`automation/tests/test_runner.py`:
 
 ```py
 from __future__ import annotations
@@ -9536,6 +11036,10 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
         ):
             return runner.run_once(precache=precache)
 
+    def _precache_once(self, runner: ExperimentRunner) -> Path:
+        with patch("Matte.automation.runner.assert_client_provisioning"):
+            return runner.precache_once()
+
     def test_later_phase_can_launch_before_earlier_blocked_phase(self) -> None:
         with temp_workspace() as workspace:
             root = Path(workspace)
@@ -9752,6 +11256,61 @@ class RunnerAsyncSchedulerTests(unittest.TestCase):
             self.assertEqual(cluster.applied_job_ids, [])
             self.assertTrue(cluster.precache_deleted_selectors)
 
+    def test_precache_once_applies_only_precache_pods(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+
+            precache_dir = self._precache_once(runner)
+
+            self.assertEqual(precache_dir.parent.parent.name, "__precache")
+            self.assertFalse((root / "runs" / "demo").exists())
+            self.assertEqual(len(cluster.precache_wait_calls), 1)
+            self.assertTrue(cluster.precache_deleted_selectors)
+            self.assertEqual(cluster.precache_pod_names, set())
+            self.assertIsNone(cluster.memcached_name)
+            self.assertEqual(cluster.applied_job_ids, [])
+
+            manifest_names = sorted(path.name for path in (precache_dir / "rendered_manifests").glob("*.yaml"))
+            self.assertTrue(manifest_names)
+            self.assertTrue(all(name.startswith("precache-") for name in manifest_names))
+            self.assertNotIn("memcached.yaml", manifest_names)
+            self.assertNotIn("blackscholes.yaml", manifest_names)
+
+            status = json.loads((precache_dir / "precache.json").read_text(encoding="utf-8"))
+            self.assertEqual(status["status"], "success")
+            self.assertEqual(status["run_id"], precache_dir.name)
+            self.assertGreater(status["image_count"], 0)
+            self.assertEqual(len(status["pod_names"]), 2)
+
+    def test_precache_once_failure_cleans_up_and_records_status(self) -> None:
+        with temp_workspace() as workspace:
+            root = Path(workspace)
+            runner, cluster = self._build_runner(
+                root,
+                phases=[Phase("p1", "start", (), 0, ("blackscholes",))],
+                outcomes={"blackscholes": JobOutcome(1)},
+            )
+            cluster.precache_wait_error = RuntimeError("Image pull failed for pod/precache")
+
+            with self.assertRaisesRegex(RuntimeError, "Image pull failed"):
+                self._precache_once(runner)
+
+            self.assertIsNone(cluster.memcached_name)
+            self.assertEqual(cluster.applied_job_ids, [])
+            self.assertTrue(cluster.precache_deleted_selectors)
+            self.assertEqual(cluster.precache_pod_names, set())
+
+            precache_root = root / "runs" / "__precache" / "demo"
+            [precache_dir] = list(precache_root.iterdir())
+            status = json.loads((precache_dir / "precache.json").read_text(encoding="utf-8"))
+            self.assertEqual(status["status"], "failed")
+            self.assertIn("Image pull failed", status["error"])
+
     def test_run_batch_precaches_only_before_first_run(self) -> None:
         with temp_workspace() as workspace:
             root = Path(workspace)
@@ -9869,7 +11428,7 @@ if __name__ == "__main__":
 
 ```
 
-`tests/test_runtime_stats.py`:
+`automation/tests/test_runtime_stats.py`:
 
 ```py
 from __future__ import annotations
@@ -10048,7 +11607,7 @@ if __name__ == "__main__":
 
 ```
 
-`tests/test_schedule_viewer.py`:
+`automation/tests/test_schedule_viewer.py`:
 
 ```py
 from __future__ import annotations
@@ -10299,7 +11858,7 @@ if __name__ == "__main__":
 
 ```
 
-`tests/test_viewer.py`:
+`automation/tests/test_viewer.py`:
 
 ```py
 from __future__ import annotations
@@ -10865,7 +12424,7 @@ if __name__ == "__main__":
 
 ```
 
-`timing.py`:
+`automation/timing.py`:
 
 ```py
 from __future__ import annotations
@@ -11021,7 +12580,7 @@ def build_get_time_report(
 
 ```
 
-`utils.py`:
+`automation/utils.py`:
 
 ```py
 from __future__ import annotations
@@ -11197,7 +12756,7 @@ def run_command(
 
 ```
 
-`viewer.py`:
+`automation/viewer.py`:
 
 ```py
 from __future__ import annotations
@@ -11479,7 +13038,7 @@ if __name__ == "__main__":
 
 ```
 
-`viewer_data.py`:
+`automation/viewer_data.py`:
 
 ```py
 from __future__ import annotations

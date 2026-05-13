@@ -1,0 +1,123 @@
+{
+  "completed_job_count": 7,
+  "expected_job_count": 7,
+  "experiment_id": "part3-PartB",
+  "jobs": {
+    "barnes": {
+      "finished_at": "2026-05-09T14:11:15Z",
+      "node_name": "node-a-8core-w1qf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.73",
+      "pod_name": "parsec-barnes-2026-05-09-16h06m55s-vv5qb",
+      "runtime_s": 56.0,
+      "started_at": "2026-05-09T14:10:19Z",
+      "status": "completed"
+    },
+    "blackscholes": {
+      "finished_at": "2026-05-09T14:11:15Z",
+      "node_name": "node-b-4core-4xgd",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.61",
+      "pod_name": "parsec-blackscholes-2026-05-09-16h06m55s-wml75",
+      "runtime_s": 53.0,
+      "started_at": "2026-05-09T14:10:22Z",
+      "status": "completed"
+    },
+    "canneal": {
+      "finished_at": "2026-05-09T14:10:17Z",
+      "node_name": "node-b-4core-4xgd",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.60",
+      "pod_name": "parsec-canneal-2026-05-09-16h06m55s-fr74q",
+      "runtime_s": 118.0,
+      "started_at": "2026-05-09T14:08:19Z",
+      "status": "completed"
+    },
+    "freqmine": {
+      "finished_at": "2026-05-09T14:10:14Z",
+      "node_name": "node-a-8core-w1qf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.72",
+      "pod_name": "parsec-freqmine-2026-05-09-16h06m55s-l67fc",
+      "runtime_s": 113.0,
+      "started_at": "2026-05-09T14:08:21Z",
+      "status": "completed"
+    },
+    "radix": {
+      "finished_at": "2026-05-09T14:11:31Z",
+      "node_name": "node-a-8core-w1qf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.74",
+      "pod_name": "parsec-radix-2026-05-09-16h06m55s-gk2hc",
+      "runtime_s": 11.0,
+      "started_at": "2026-05-09T14:11:20Z",
+      "status": "completed"
+    },
+    "streamcluster": {
+      "finished_at": "2026-05-09T14:11:55Z",
+      "node_name": "node-a-8core-w1qf",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.5.71",
+      "pod_name": "parsec-streamcluster-2026-05-09-16h06m55s-87782",
+      "runtime_s": 215.0,
+      "started_at": "2026-05-09T14:08:20Z",
+      "status": "completed"
+    },
+    "vips": {
+      "finished_at": "2026-05-09T14:12:26Z",
+      "node_name": "node-b-4core-4xgd",
+      "phase": "Succeeded",
+      "pod_ip": "100.96.4.62",
+      "pod_name": "parsec-vips-2026-05-09-16h06m55s-pmlmh",
+      "runtime_s": 65.0,
+      "started_at": "2026-05-09T14:11:21Z",
+      "status": "completed"
+    }
+  },
+  "makespan_s": 247.0,
+  "max_observed_p95_us": 423.2,
+  "measurement_status": "ok",
+  "memcached": {
+    "node_name": "node-b-4core-4xgd",
+    "phase": "Running",
+    "pod_ip": "100.96.4.59",
+    "pod_name": "memcached-server-2026-05-09-16h06m55s"
+  },
+  "node_platforms": {
+    "capture_status": "ok",
+    "errors": [],
+    "nodes": {
+      "node-a-8core": {
+        "capture_status": "ok",
+        "cpu_platform": "AMD Rome",
+        "gcp_name": "node-a-8core-w1qf",
+        "gcp_status": "RUNNING",
+        "machine_type": "e2-standard-8",
+        "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/e2-standard-8",
+        "node_name": "node-a-8core-w1qf",
+        "node_type": "node-a-8core",
+        "zone": "europe-west1-b",
+        "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+      },
+      "node-b-4core": {
+        "capture_status": "ok",
+        "cpu_platform": "AMD Milan",
+        "gcp_name": "node-b-4core-4xgd",
+        "gcp_status": "RUNNING",
+        "machine_type": "n2d-highcpu-4",
+        "machine_type_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b/machineTypes/n2d-highcpu-4",
+        "node_name": "node-b-4core-4xgd",
+        "node_type": "node-b-4core",
+        "zone": "europe-west1-b",
+        "zone_uri": "https://www.googleapis.com/compute/v1/projects/cca-eth-2026-group-54/zones/europe-west1-b"
+      }
+    },
+    "zone": "europe-west1-b"
+  },
+  "overall_status": "pass",
+  "policy_name": "split-brain-NodeA",
+  "run_id": "2026-05-09-16h06m55s",
+  "sample_count": 24,
+  "slo_violations": 0,
+  "timing_complete": true
+}

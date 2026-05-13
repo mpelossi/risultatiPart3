@@ -1,5 +1,5 @@
 {
-  "experiment_id": "part3-OPENEVOLVE_GLM5.1",
+  "experiment_id": "part3-PartB",
   "cluster_name": "part3.k8s.local",
   "zone": "europe-west1-b",
   "kops_state_store": "gs://cca-eth-2026-group-54-mpelossi",

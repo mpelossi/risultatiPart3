@@ -1,0 +1,31 @@
+2026-05-10T00:56:44.767693+00:00 Run directory prepared: /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/part3-PartB/2026-05-10-02h56m44s
+2026-05-10T00:56:44.767880+00:00 Rendered 8 manifests into /home/carti/ETH/Msc/CCA/risultatiPart3/Matte/automation/runs/part3-PartB/2026-05-10-02h56m44s/rendered_manifests
+2026-05-10T00:56:44.767974+00:00 Cleaning previous managed workloads
+2026-05-10T00:57:18.794384+00:00 Ensuring canonical node labels and checking client provisioning
+2026-05-10T00:57:33.307703+00:00 Applying memcached manifest
+2026-05-10T00:57:37.680679+00:00 Capturing benchmark node CPU platforms
+2026-05-10T00:57:44.133916+00:00 Benchmark node CPU platform capture complete: node-a-8core=e2-standard-8/AMD Rome, node-b-4core=n2d-highcpu-4/AMD Milan
+2026-05-10T00:57:44.135663+00:00 Restarting mcperf-agent.service on client-agent-a (client-agent-a-tp31)
+2026-05-10T00:57:55.110182+00:00 mcperf-agent.service active on client-agent-a (client-agent-a-tp31)
+2026-05-10T00:57:55.110428+00:00 Restarting mcperf-agent.service on client-agent-b (client-agent-b-ggp4)
+2026-05-10T00:58:03.860866+00:00 mcperf-agent.service active on client-agent-b (client-agent-b-ggp4)
+2026-05-10T00:58:03.861150+00:00 Starting measurement against memcached IP 100.96.4.60
+2026-05-10T00:58:04.772613+00:00 Waiting for first mcperf measurement sample
+2026-05-10T00:58:16.258818+00:00 mcperf measurement header observed
+2026-05-10T00:58:29.479215+00:00 mcperf measurement sample observed
+2026-05-10T00:58:29.479305+00:00 mcperf measurement is live
+2026-05-10T00:58:29.479832+00:00 Starting phase scheduler
+2026-05-10T00:58:30.133886+00:00 Phase dependency satisfied for phase-01: start
+2026-05-10T00:58:30.134292+00:00 Phase dependency satisfied for phase-03: start
+2026-05-10T00:58:30.134488+00:00 Launching phase phase-01: canneal
+2026-05-10T00:58:30.828224+00:00 Launching phase phase-03: barnes, streamcluster
+2026-05-10T00:58:33.896480+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=['parsec-barnes-2026-05-10-02h56m44s', 'parsec-canneal-2026-05-10-02h56m44s', 'parsec-streamcluster-2026-05-10-02h56m44s']
+2026-05-10T00:58:50.570084+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=['parsec-barnes-2026-05-10-02h56m44s', 'parsec-canneal-2026-05-10-02h56m44s', 'parsec-streamcluster-2026-05-10-02h56m44s']
+2026-05-10T00:59:07.760808+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=['parsec-barnes-2026-05-10-02h56m44s', 'parsec-canneal-2026-05-10-02h56m44s', 'parsec-streamcluster-2026-05-10-02h56m44s']
+2026-05-10T00:59:23.283735+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=[]
+2026-05-10T00:59:41.763528+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=[]
+2026-05-10T00:59:56.857991+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=[]
+2026-05-10T01:00:14.394568+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=[]
+2026-05-10T01:00:29.402026+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=[]
+2026-05-10T01:00:47.294073+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=[]
+2026-05-10T01:01:02.831056+00:00 Scheduler heartbeat: launched_phases=['phase-01', 'phase-03'] pending_phases=['phase-02', 'phase-04', 'phase-05', 'phase-06'] completed_jobs=[] running_jobs=[]

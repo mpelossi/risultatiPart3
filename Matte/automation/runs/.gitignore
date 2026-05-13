@@ -4,6 +4,5 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd          
-# runs/
-part3-handcrafted/
+# part3-handcrafted/
 .codex

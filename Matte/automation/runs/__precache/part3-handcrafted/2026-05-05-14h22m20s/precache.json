@@ -1,0 +1,11 @@
+{
+  "experiment_id": "part3-handcrafted",
+  "image_count": 8,
+  "pod_names": [
+    "precache-node-a-8core-2026-05-05-14h22m20s",
+    "precache-node-b-4core-2026-05-05-14h22m20s"
+  ],
+  "policy_name": "ultimate-6-2-split",
+  "run_id": "2026-05-05-14h22m20s",
+  "status": "success"
+}
