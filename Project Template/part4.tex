@@ -102,14 +102,11 @@ $ ./mcperf -s INTERNAL_MEMCACHED_IP -a INTERNAL_AGENT_IP \
         
     \textbf{Answer:}
     Our controller samples memcached CPU usage every 1 s and dynamically changes the number of cores assigned to memcached between 1 and 3. Memcached is pinned to the low-numbered cores, while Docker batch jobs are restricted to the remaining cores using cpuset updates. The policy prioritizes SLO protection: memcached cores are increased immediately under high per-core CPU load, while cores are released only after sustained low load. To reduce makespan, the final policy uses an opportunistic overlap mode: when memcached needs only one core, the two long critical-path jobs, \colored{streamcluster} and \colored{freqmine}, are allowed to run concurrently with a companion job. When memcached needs two or three cores, the policy falls back to a more conservative schedule. The controller does not use future QPS values; it reacts only to runtime CPU signals.
-    \\
      
     \item How do you decide how many cores to dynamically assign to memcached? Why?
     
     \textbf{Answer:}
 Memcached uses a fixed thread count of $T^*=3$ and dynamically receives $C_{mem}\in\{1,2,3\}$. The controller starts with $C_{mem}=2$. Every second it computes memcached CPU utilization per assigned core. If utilization exceeds $85\%$ per core, $C_{mem}$ is increased immediately, up to 3 cores, to protect the 0.8 ms p95 latency SLO. If utilization stays below $55\%$ per core for 20 seconds, $C_{mem}$ is reduced by one, down to 1 core, to give more capacity back to batch jobs. This hysteresis avoids oscillations while still reacting quickly to high QPS.
-
-     \\
 
     \item How do you decide how many cores to assign each batch job? Why?
 
@@ -146,8 +143,6 @@ Threads are usually set equal to the number of assigned cores, capped by the per
     \textbf{Answer:}
 Memcached always uses the low-numbered cores $[0..C_{mem}-1]$. Batch jobs use only the remaining high-numbered cores. When $C_{mem}=1$, the controller can use cores 1--3 and may collocate \colored{streamcluster}, \colored{freqmine}, and one companion job. When $C_{mem}=2$, it usually runs one long job plus one companion job. When $C_{mem}=3$, only one safe/useful batch job runs on the remaining core, preferring \colored{radix} or \colored{blackscholes}. This keeps risky interference away from memcached during high load while exploiting low-load periods to shorten the batch critical path.
 
-     \\
-    
     \item In which order did you run the batch jobs? Why?
 
 \textbf{Order} (to be sorted):
@@ -161,25 +156,18 @@ Memcached always uses the low-numbered cores $[0..C_{mem}-1]$. Batch jobs use on
     \textbf{Why:}
     The policy prioritizes \colored{streamcluster} and \colored{freqmine} because they are the longest critical-path jobs, so delaying them increases makespan. \colored{canneal} is started as a companion when enough memcached headroom exists, but it is blocked when memcached needs 3 cores. Among short jobs, \colored{radix} and \colored{blackscholes} are scheduled early because they are safer for memcached, while \colored{barnes} and \colored{vips} are more CPU/L1i-risky and are therefore scheduled later or paused under pressure.
 
-     \\
-
 \item How does your policy differ from the policy in Part 3? Why?
 
 \textbf{Answer:} Part 3 used a static schedule and fixed resource assignment for a fixed-load scenario. Part 4 uses a dynamic QPS trace on one 4-core VM, so a static assignment would either waste cores at low QPS or violate the memcached SLO at high QPS. The Part 4 controller therefore continuously adjusts memcached cores, updates Docker cpusets for batch jobs, and uses pause/unpause as a recovery mechanism. In addition, unlike Part 3, it opportunistically overlaps the long batch jobs only when memcached has enough headroom, and falls back to a conservative schedule when memcached load increases.
 
-\\
 
 \item How did you implement your policy? e.g., docker cpu-set updates, taskset updates for memcached, pausing/unpausing containers, etc.
 
 \textbf{Answer:} The controller runs on the memcache-server VM. Memcached is controlled with \texttt{taskset} to update its CPU affinity. Batch jobs are launched as Docker containers with the native input dataset and fixed cpusets. While running, the controller uses Docker cpuset updates to move containers to the currently available batch cores. If memcached per-core CPU exceeds the recovery threshold, the controller pauses the riskiest running container; it unpauses paused containers once memcached utilization falls below the recovery threshold and the job is still part of the desired schedule. All start, end, pause, unpause, and core-update events are logged.
 
-\\
-
 \item Describe the design choices, ideas and trade-offs you took into account while creating your scheduler (\underline{if not already mentioned above}). Describe how your policy (and its performance) compares to another policy that you experimented with (in particular to the second-best policy that you designed).
 
 \textbf{Answer:} The main trade-off is makespan versus memcached SLO protection. The original conservative policy completed Q4.iii in $1208.52\pm33.00$ s with no SLO violations, but it left too much critical-path work serialized. We therefore tested a more aggressive policy that always overlapped the two long jobs; it reduced makespan in some runs but produced SLO violations above the 3\% target. The final opportunistic-overlap policy keeps this overlap only when memcached has been reduced to one core, and falls back to the conservative schedule when memcached needs more protection. With this design, Q4.iii improved to $968.19\pm23.20$ s while keeping the SLO violation ratio at $0.0\%$ in all three runs.
-
-\\
 \end{itemize}
 
 \item \textbf{[23 points]} Run the following \texttt{mcperf} memcached dynamic load trace: 
@@ -213,8 +201,6 @@ $ ./mcperf -s INTERNAL_MEMCACHED_IP -a INTERNAL_AGENT_IP \
 
     \textbf{Answer:}
     We ran the dynamic mcperf trace with $qps\_interval=15$ and $qps\_seed=2345$ three times using our dynamic controller. All seven batch jobs completed successfully in every run. The reported job runtimes exclude time spent paused. The mean makespan over the three runs was $968.19$ s with a standard deviation of $23.20$ s. The memcached SLO violation ratio was $0.0\%$ in all three runs: run 1 = $0.0\%$, run 2 = $0.0\%$, run 3 = $0.0\%$. Therefore, the controller met the 0.8 ms p95 latency SLO while completing all batch jobs.
-
-    \\
 
     Include three plots: one for each of the three runs with the following information: The x-axis should be the time from execution start to end. Use three subplots that share the same x-axis. The first should clearly indicate for each core what job it is running at all time (e.g. using colored boxes). Use the colors proposed in this template (you can find them in \texttt{main.text}). If you pause/unpause jobs as part of your scheduling policy this should also be clearly visible. The second subplot should include two y-axis where the left one shows the current QPS and the right one should include the achieved p95 latency. Finally, the third subplot should plot the cpu utilization of each core separately. The readability of your plot will be part of awarded points.
     %Include six plots -- two plots for each of the three runs -- with the following information. Label the plots as 1A, 1B, 2A, 2B, 3A, and 3B where the number indicates the run and the letter indicates the type of plot (A or B), which we describe below. In all plots, time will be on the x-axis and you should annotate the x-axis to indicate which benchmark (batch) application starts executing at which time. If you pause/unpause any workloads as part of your policy, you should also indicate the timestamps at which jobs are paused and unpaused. All the plots will have have two y-axes. The right y-axis will be QPS. For Plots A, the left y-axis will be the 95th percentile latency. For Plots B, the left y-axis will be the number of CPU cores that your controller allocates to memcached. For the plot, use the colors proposed in this template (you can find them in \texttt{main.tex}).
@@ -254,25 +240,17 @@ $ ./mcperf -s INTERNAL_MEMCACHED_IP -a INTERNAL_AGENT_IP \
     \textbf{Summary:} 
     With $qps\_interval=5$, the load changes more frequently than in Question 3, so the controller has less time to react and keeps or returns CPU capacity to memcached more aggressively. This increases pressure on the scheduler compared with the 15 s trace, but the controller still keeps memcached below the required 3\% SLO violation threshold. In the 5 s sweep run, the SLO violation ratio was $0.76\%$, compared with $0.0\%$ average for the original 15 s trace.
 
-    \\
-    
     What is the SLO violation ratio for memcached (i.e., the number of datapoints with 95th percentile latency $>$ 0.8ms, as a fraction of the total number of datapoints) with the 5-second time interval trace? The SLO violation ratio should be calculated during the time from when the first batch-job-container starts running to when the last batch-job-container stops running.
 
     \textbf{Answer:} The SLO violation ratio for the 5-second interval trace was $0.00756$, i.e. $0.76\%$.
 
-    \\
-    
     What is the smallest \texttt{qps\_interval} you can use in the load trace that allows your controller to respond fast enough to keep the memcached SLO violation ratio under 3\%? 
     
-    \textbf{Answer:}The smallest tested \texttt{qps\_interval} that kept the memcached SLO violation ratio below $3\%$ was $1$ second.
+    \textbf{Answer:} The smallest tested \texttt{qps\_interval} that kept the memcached SLO violation ratio below $3\%$ was $1$ second.
 
-    \\
-    
     What is the reasoning behind this specific value? Explain which features of your controller affect the smallest \texttt{qps\_interval} interval you proposed.
 
     \textbf{Answer:}We tested intervals $15,10,7,5,3,2,1$ seconds. The controller still stayed below the $3\%$ SLO violation threshold at $1$ second: the sweep run had $0.95\%$ violations. This works because the controller samples CPU utilization every second, immediately increases memcached's CPU allocation when pressure is high, and pauses/unpauses batch jobs when memcached needs protection. The main limiting factor is this 1-second control loop and the overhead of changing Docker cpusets and memcached taskset assignments; below 1 second the load could change faster than the controller can reliably observe and react.
-
-    \\
 
     % Use this \texttt{qps\_interval} in the command above and collect results for three runs and fill out the table below. %Include the same types of plots (1A, 1B, 2A, 2B, 3A, 3B) and table as in Question 3. 
     
@@ -312,7 +290,7 @@ $ ./mcperf -s INTERNAL_MEMCACHED_IP -a INTERNAL_AGENT_IP \
 %     \caption{Q4.iv run 3.}
 % \end{figure}
 
-% \end{enumerate}
+\end{enumerate}
 
 \noindent
 \textbf{\underline{Use of AI Tools}: Did you use any AI tools for this project? If so, disclose them here and explain what you used the tool(s) for and why. Note that the use of AI tools is NOT needed and NOT expected for the project.}
