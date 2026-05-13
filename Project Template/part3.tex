@@ -13,7 +13,7 @@
 
     \begin{table}[ht]
         \centering
-        \begin{tabular}{ |c|c|c|c|c|} 
+        \begin{tabular}{ |c|c|c|} 
             \hline
             job name & mean time [s] & std [s] \\ \hline \hline
             \coloredcell{barnes}          & 63.33 & 1.53 \\  \hline
@@ -27,7 +27,7 @@
         \end{tabular}
     \end{table}
 
-    \textbf{Answer:} The values in the table are computed from the container \texttt{startedAt} and \texttt{finishedAt} timestamps in \texttt{results.json}. All three executions completed the seven batch jobs successfully. During the interval from the first batch container start to the last batch container finish, no measured memcached p95 sample exceeded the \(1\,\mathrm{ms}\) SLO; the resulting SLO violation ratio is \(0.000\).
+    \textbf{Answer:} The values in the table are computed from the container \texttt{startedAt} and \texttt{finishedAt} timestamps in \texttt{results.json}. In the augmented \texttt{mcperf} output, \texttt{ts\_start} and \texttt{ts\_end} are Unix epoch timestamps in milliseconds that bound the measurement interval represented by one p95 latency row. All three executions completed the seven batch jobs successfully. During the interval from the first batch container start to the last batch container finish, no measured memcached p95 sample exceeded the \(1\,\mathrm{ms}\) SLO; the resulting SLO violation ratio is \(0.000\).
     \\
     
     Create 3 bar plots (one for each run) of memcached p95 latency (y-axis) over time (x-axis), with annotations showing when each batch job started and ended, also indicating the machine each of them is running on. Using the augmented version of mcperf, you get two additional columns in the output: \texttt{ts\_start} and \texttt{ts\_end}. Use them to determine the width of each bar in the bar plot, while the height should represent the p95 latency. Align the $x$ axis so that $x=0$ coincides with the starting time of the first container. 
@@ -38,250 +38,21 @@
 
     \begin{figure}[H]
         \centering
-        \resizebox{\textwidth}{!}{
-        \begin{tikzpicture}[font=\scriptsize]
-            \begin{scope}[x=0.026cm,y=2.0cm]
-                \path[draw, ->] (0,0) edge node[pos=1, right] {time [s]} (235,0);
-                \path[draw, ->] (0,0) edge node[pos=1, above] {p95 [ms]} (0,1.15);
-                \path[draw=red, dashed] (0,1.0) edge node[pos=1, right] {\(1\,\mathrm{ms}\)} (229,1.0);
-                \foreach \x in {0,60,120,180} {
-                    \path[draw=gray!45] (\x,0) edge node[pos=1, below] {\x} (\x,-0.035);
-                }
-                \path[draw=gray!45] (229,0) edge node[pos=1, below] {229} (229,-0.035);
-                \node[anchor=east] at (0,0.5) {0.5};
-                \node[anchor=east] at (0,1.0) {1.0};
-                \fill[gray!45, draw=gray!70] (0.0,0) rectangle (9.4,0.355);
-                \fill[gray!45, draw=gray!70] (10.9,0) rectangle (21.0,0.359);
-                \fill[gray!45, draw=gray!70] (22.5,0) rectangle (32.6,0.354);
-                \fill[gray!45, draw=gray!70] (34.1,0) rectangle (44.2,0.358);
-                \fill[gray!45, draw=gray!70] (45.8,0) rectangle (55.9,0.337);
-                \fill[gray!45, draw=gray!70] (57.4,0) rectangle (67.5,0.355);
-                \fill[gray!45, draw=gray!70] (69.0,0) rectangle (79.1,0.346);
-                \fill[gray!45, draw=gray!70] (80.6,0) rectangle (90.7,0.348);
-                \fill[gray!45, draw=gray!70] (92.2,0) rectangle (102.3,0.350);
-                \fill[gray!45, draw=gray!70] (103.8,0) rectangle (113.9,0.356);
-                \fill[gray!45, draw=gray!70] (115.5,0) rectangle (125.6,0.359);
-                \fill[gray!45, draw=gray!70] (127.1,0) rectangle (137.2,0.346);
-                \fill[gray!45, draw=gray!70] (138.7,0) rectangle (148.8,0.375);
-                \fill[gray!45, draw=gray!70] (150.3,0) rectangle (160.4,0.361);
-                \fill[gray!45, draw=gray!70] (161.9,0) rectangle (172.0,0.360);
-                \fill[gray!45, draw=gray!70] (173.5,0) rectangle (183.6,0.356);
-                \fill[gray!45, draw=gray!70] (185.1,0) rectangle (195.2,0.373);
-                \fill[gray!45, draw=gray!70] (196.8,0) rectangle (206.9,0.360);
-                \fill[gray!45, draw=gray!70] (208.4,0) rectangle (218.5,0.359);
-                \fill[gray!45, draw=gray!70] (220.0,0) rectangle (229.0,0.358);
-            \end{scope}
-            \begin{scope}[x=0.026cm,y=0.24cm,yshift=-3.65cm]
-                \foreach \x in {0,60,120,180} {
-                    \path[draw=gray!25] (\x,0) edge (\x,12.85);
-                    \path[draw=gray!45] (\x,0) edge node[pos=1, below] {\x} (\x,-0.25);
-                }
-                \path[draw=gray!45] (229,0) edge node[pos=1, below] {229} (229,-0.25);
-                \foreach \y in {0,1,2,3,4,5,6,7,8,9,10,11,12,13} {
-                    \path[draw=gray!18] (0,\y) edge (229,\y);
-                }
-                \node[anchor=east, font=\scriptsize\bfseries] at (-37,4.0) {node-a-8core};
-                \node[anchor=east] at (-6,0.42) {a0};
-                \node[anchor=east] at (-6,1.42) {a1};
-                \node[anchor=east] at (-6,2.42) {a2};
-                \node[anchor=east] at (-6,3.42) {a3};
-                \node[anchor=east] at (-6,4.42) {a4};
-                \node[anchor=east] at (-6,5.42) {a5};
-                \node[anchor=east] at (-6,6.42) {a6};
-                \node[anchor=east] at (-6,7.42) {a7};
-                \node[anchor=east, font=\scriptsize\bfseries] at (-37,11.0) {node-b-4core};
-                \node[anchor=east] at (-6,9.42) {b0};
-                \node[anchor=east] at (-6,10.42) {b1};
-                \node[anchor=east] at (-6,11.42) {b2};
-                \node[anchor=east] at (-6,12.42) {b3};
-                \filldraw[fill=streamcluster, draw=black!45] (0,0) rectangle (105,7.85);
-                \node at (52.5,4.0) {streamcluster, node-a};
-                \filldraw[fill=freqmine, draw=black!45] (110,0) rectangle (177,7.85);
-                \node at (143.5,4.0) {freqmine, node-a};
-                \filldraw[fill=vips, draw=black!45] (182,0) rectangle (203,5.85);
-                \node[rotate=90] at (192.5,3.0) {vips};
-                \filldraw[fill=radix, draw=black!45] (183,6) rectangle (203,7.85);
-                \node at (193,6.9) {radix};
-                \filldraw[fill=gray!35, draw=black!45] (0,9) rectangle (229,9.85);
-                \node at (114.5,9.42) {memcached, node-b};
-                \filldraw[fill=blackscholes, draw=black!45] (1,10) rectangle (46,12.85);
-                \node at (23.5,11.4) {blackscholes, node-b};
-                \filldraw[fill=canneal, draw=black!45] (54,10) rectangle (161,12.85);
-                \node at (107.5,11.4) {canneal, node-b};
-                \filldraw[fill=barnes, draw=black!45] (166,10) rectangle (229,12.85);
-                \node at (197.5,11.4) {barnes, node-b};
-                \node at (114.5,-1.35) {time from first batch container start [s]};
-            \end{scope}
-        \end{tikzpicture}
-        }
-        \caption{Run \texttt{2026-05-10-02h40m25s}: memcached p95 latency and per-core batch placement.}
+        \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run1.png}
+        {\small Run~1 (\texttt{2026-05-10-02h28m11s}). Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
     \end{figure}
 
     \begin{figure}[H]
         \centering
-        \resizebox{\textwidth}{!}{
-        \begin{tikzpicture}[font=\scriptsize]
-            \begin{scope}[x=0.026cm,y=2.0cm]
-                \path[draw, ->] (0,0) edge node[pos=1, right] {time [s]} (239,0);
-                \path[draw, ->] (0,0) edge node[pos=1, above] {p95 [ms]} (0,1.15);
-                \path[draw=red, dashed] (0,1.0) edge node[pos=1, right] {\(1\,\mathrm{ms}\)} (233,1.0);
-                \foreach \x in {0,60,120,180} {
-                    \path[draw=gray!45] (\x,0) edge node[pos=1, below] {\x} (\x,-0.035);
-                }
-                \path[draw=gray!45] (233,0) edge node[pos=1, below] {233} (233,-0.035);
-                \node[anchor=east] at (0,0.5) {0.5};
-                \node[anchor=east] at (0,1.0) {1.0};
-                \fill[gray!45, draw=gray!70] (0.0,0) rectangle (9.0,0.339);
-                \fill[gray!45, draw=gray!70] (10.5,0) rectangle (20.6,0.342);
-                \fill[gray!45, draw=gray!70] (22.1,0) rectangle (32.2,0.351);
-                \fill[gray!45, draw=gray!70] (33.7,0) rectangle (43.8,0.353);
-                \fill[gray!45, draw=gray!70] (45.3,0) rectangle (55.4,0.351);
-                \fill[gray!45, draw=gray!70] (56.9,0) rectangle (67.0,0.346);
-                \fill[gray!45, draw=gray!70] (68.6,0) rectangle (78.7,0.340);
-                \fill[gray!45, draw=gray!70] (80.2,0) rectangle (90.3,0.344);
-                \fill[gray!45, draw=gray!70] (91.8,0) rectangle (101.9,0.353);
-                \fill[gray!45, draw=gray!70] (103.4,0) rectangle (113.5,0.369);
-                \fill[gray!45, draw=gray!70] (115.0,0) rectangle (125.1,0.366);
-                \fill[gray!45, draw=gray!70] (126.6,0) rectangle (136.7,0.358);
-                \fill[gray!45, draw=gray!70] (138.3,0) rectangle (148.4,0.353);
-                \fill[gray!45, draw=gray!70] (149.9,0) rectangle (160.0,0.345);
-                \fill[gray!45, draw=gray!70] (161.5,0) rectangle (171.6,0.352);
-                \fill[gray!45, draw=gray!70] (173.1,0) rectangle (183.2,0.363);
-                \fill[gray!45, draw=gray!70] (184.7,0) rectangle (194.8,0.366);
-                \fill[gray!45, draw=gray!70] (196.3,0) rectangle (206.4,0.379);
-                \fill[gray!45, draw=gray!70] (207.9,0) rectangle (218.1,0.364);
-                \fill[gray!45, draw=gray!70] (219.6,0) rectangle (229.7,0.359);
-                \fill[gray!45, draw=gray!70] (231.2,0) rectangle (233.0,0.346);
-            \end{scope}
-            \begin{scope}[x=0.026cm,y=0.24cm,yshift=-3.65cm]
-                \foreach \x in {0,60,120,180} {
-                    \path[draw=gray!25] (\x,0) edge (\x,12.85);
-                    \path[draw=gray!45] (\x,0) edge node[pos=1, below] {\x} (\x,-0.25);
-                }
-                \path[draw=gray!45] (233,0) edge node[pos=1, below] {233} (233,-0.25);
-                \foreach \y in {0,1,2,3,4,5,6,7,8,9,10,11,12,13} {
-                    \path[draw=gray!18] (0,\y) edge (233,\y);
-                }
-                \node[anchor=east, font=\scriptsize\bfseries] at (-37,4.0) {node-a-8core};
-                \node[anchor=east] at (-6,0.42) {a0};
-                \node[anchor=east] at (-6,1.42) {a1};
-                \node[anchor=east] at (-6,2.42) {a2};
-                \node[anchor=east] at (-6,3.42) {a3};
-                \node[anchor=east] at (-6,4.42) {a4};
-                \node[anchor=east] at (-6,5.42) {a5};
-                \node[anchor=east] at (-6,6.42) {a6};
-                \node[anchor=east] at (-6,7.42) {a7};
-                \node[anchor=east, font=\scriptsize\bfseries] at (-37,11.0) {node-b-4core};
-                \node[anchor=east] at (-6,9.42) {b0};
-                \node[anchor=east] at (-6,10.42) {b1};
-                \node[anchor=east] at (-6,11.42) {b2};
-                \node[anchor=east] at (-6,12.42) {b3};
-                \filldraw[fill=streamcluster, draw=black!45] (0,0) rectangle (103,7.85);
-                \node at (51.5,4.0) {streamcluster, node-a};
-                \filldraw[fill=freqmine, draw=black!45] (108,0) rectangle (175,7.85);
-                \node at (141.5,4.0) {freqmine, node-a};
-                \filldraw[fill=vips, draw=black!45] (181,0) rectangle (201,5.85);
-                \node[rotate=90] at (191,3.0) {vips};
-                \filldraw[fill=radix, draw=black!45] (182,6) rectangle (201,7.85);
-                \node at (191.5,6.9) {radix};
-                \filldraw[fill=gray!35, draw=black!45] (0,9) rectangle (233,9.85);
-                \node at (116.5,9.42) {memcached, node-b};
-                \filldraw[fill=blackscholes, draw=black!45] (0,10) rectangle (51,12.85);
-                \node at (25.5,11.4) {blackscholes, node-b};
-                \filldraw[fill=canneal, draw=black!45] (57,10) rectangle (166,12.85);
-                \node at (111.5,11.4) {canneal, node-b};
-                \filldraw[fill=barnes, draw=black!45] (171,10) rectangle (233,12.85);
-                \node at (202,11.4) {barnes, node-b};
-                \node at (116.5,-1.35) {time from first batch container start [s]};
-            \end{scope}
-        \end{tikzpicture}
-        }
-        \caption{Run \texttt{2026-05-10-02h28m11s}: memcached p95 latency and per-core batch placement.}
+        \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run2.png}
+        {\small Run~2 (\texttt{2026-05-10-02h34m13s}). Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
     \end{figure}
 
     \begin{figure}[H]
         \centering
-        \resizebox{\textwidth}{!}{
-        \begin{tikzpicture}[font=\scriptsize]
-            \begin{scope}[x=0.026cm,y=2.0cm]
-                \path[draw, ->] (0,0) edge node[pos=1, right] {time [s]} (241,0);
-                \path[draw, ->] (0,0) edge node[pos=1, above] {p95 [ms]} (0,1.15);
-                \path[draw=red, dashed] (0,1.0) edge node[pos=1, right] {\(1\,\mathrm{ms}\)} (235,1.0);
-                \foreach \x in {0,60,120,180} {
-                    \path[draw=gray!45] (\x,0) edge node[pos=1, below] {\x} (\x,-0.035);
-                }
-                \path[draw=gray!45] (235,0) edge node[pos=1, below] {235} (235,-0.035);
-                \node[anchor=east] at (0,0.5) {0.5};
-                \node[anchor=east] at (0,1.0) {1.0};
-                \fill[gray!45, draw=gray!70] (0.0,0) rectangle (9.8,0.340);
-                \fill[gray!45, draw=gray!70] (11.3,0) rectangle (21.4,0.355);
-                \fill[gray!45, draw=gray!70] (22.9,0) rectangle (33.0,0.370);
-                \fill[gray!45, draw=gray!70] (34.6,0) rectangle (44.7,0.338);
-                \fill[gray!45, draw=gray!70] (46.2,0) rectangle (56.3,0.361);
-                \fill[gray!45, draw=gray!70] (57.8,0) rectangle (67.9,0.343);
-                \fill[gray!45, draw=gray!70] (69.4,0) rectangle (79.5,0.342);
-                \fill[gray!45, draw=gray!70] (81.0,0) rectangle (91.1,0.342);
-                \fill[gray!45, draw=gray!70] (92.6,0) rectangle (102.7,0.376);
-                \fill[gray!45, draw=gray!70] (104.3,0) rectangle (114.4,0.366);
-                \fill[gray!45, draw=gray!70] (115.9,0) rectangle (126.0,0.367);
-                \fill[gray!45, draw=gray!70] (127.5,0) rectangle (137.6,0.365);
-                \fill[gray!45, draw=gray!70] (139.1,0) rectangle (149.2,0.363);
-                \fill[gray!45, draw=gray!70] (150.7,0) rectangle (160.8,0.385);
-                \fill[gray!45, draw=gray!70] (162.3,0) rectangle (172.4,0.346);
-                \fill[gray!45, draw=gray!70] (173.9,0) rectangle (184.1,0.359);
-                \fill[gray!45, draw=gray!70] (185.6,0) rectangle (195.7,0.355);
-                \fill[gray!45, draw=gray!70] (197.2,0) rectangle (207.3,0.366);
-                \fill[gray!45, draw=gray!70] (208.8,0) rectangle (218.9,0.341);
-                \fill[gray!45, draw=gray!70] (220.4,0) rectangle (230.5,0.371);
-                \fill[gray!45, draw=gray!70] (232.0,0) rectangle (235.0,0.346);
-            \end{scope}
-            \begin{scope}[x=0.026cm,y=0.24cm,yshift=-3.65cm]
-                \foreach \x in {0,60,120,180} {
-                    \path[draw=gray!25] (\x,0) edge (\x,12.85);
-                    \path[draw=gray!45] (\x,0) edge node[pos=1, below] {\x} (\x,-0.25);
-                }
-                \path[draw=gray!45] (235,0) edge node[pos=1, below] {235} (235,-0.25);
-                \foreach \y in {0,1,2,3,4,5,6,7,8,9,10,11,12,13} {
-                    \path[draw=gray!18] (0,\y) edge (235,\y);
-                }
-                \node[anchor=east, font=\scriptsize\bfseries] at (-37,4.0) {node-a-8core};
-                \node[anchor=east] at (-6,0.42) {a0};
-                \node[anchor=east] at (-6,1.42) {a1};
-                \node[anchor=east] at (-6,2.42) {a2};
-                \node[anchor=east] at (-6,3.42) {a3};
-                \node[anchor=east] at (-6,4.42) {a4};
-                \node[anchor=east] at (-6,5.42) {a5};
-                \node[anchor=east] at (-6,6.42) {a6};
-                \node[anchor=east] at (-6,7.42) {a7};
-                \node[anchor=east, font=\scriptsize\bfseries] at (-37,11.0) {node-b-4core};
-                \node[anchor=east] at (-6,9.42) {b0};
-                \node[anchor=east] at (-6,10.42) {b1};
-                \node[anchor=east] at (-6,11.42) {b2};
-                \node[anchor=east] at (-6,12.42) {b3};
-                \filldraw[fill=streamcluster, draw=black!45] (0,0) rectangle (132,7.85);
-                \node at (66,4.0) {streamcluster, node-a};
-                \filldraw[fill=freqmine, draw=black!45] (138,0) rectangle (206,7.85);
-                \node at (172,4.0) {freqmine, node-a};
-                \filldraw[fill=vips, draw=black!45] (211,0) rectangle (234,5.85);
-                \node[rotate=90] at (222.5,3.0) {vips};
-                \filldraw[fill=radix, draw=black!45] (212,6) rectangle (235,7.85);
-                \node at (223.5,6.9) {radix};
-                \filldraw[fill=gray!35, draw=black!45] (0,9) rectangle (235,9.85);
-                \node at (117.5,9.42) {memcached, node-b};
-                \filldraw[fill=blackscholes, draw=black!45] (1,10) rectangle (48,12.85);
-                \node at (24.5,11.4) {blackscholes, node-b};
-                \filldraw[fill=canneal, draw=black!45] (56,10) rectangle (162,12.85);
-                \node at (109,11.4) {canneal, node-b};
-                \filldraw[fill=barnes, draw=black!45] (167,10) rectangle (232,12.85);
-                \node at (199.5,11.4) {barnes, node-b};
-                \node at (117.5,-1.35) {time from first batch container start [s]};
-            \end{scope}
-        \end{tikzpicture}
-        }
-        \caption{Run \texttt{2026-05-10-02h34m13s}: memcached p95 latency and per-core batch placement.}
+        \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run3.png}
+        {\small Run~3 (\texttt{2026-05-10-02h40m25s}). Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
     \end{figure}
-        
-
     % QUESTION b
     \item \textbf{[17 points]} Describe and justify the “optimal” scheduling policy you have designed. 
     
