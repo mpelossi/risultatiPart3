@@ -1,8 +1,14 @@
 \section*{Part 3 [68 points]}
 
 \begin{enumerate}
+
+    % PART 1
     \item \textbf{[34 points]} Describe and analyze your hand-crafted policy. 
     \begin{enumerate}
+
+
+
+    % QUESTION b
     \item \textbf{[17 points]} With your scheduling policy, run the entire workflow \textbf{\textcolor{red}{3 separate times}}. For each run, measure the execution time of each batch job, as well as the latency outputs of memcached, running with a steady client load of 30K QPS. For each batch application, compute the mean and standard deviation of the execution time \footnote{Here, you should only consider the runtime, excluding time spans during which the container is paused.} across three runs. Also, compute the mean and standard deviation of the total time to complete all jobs - the makespan of all jobs. Fill in the table below. Finally, compute the SLO violation ratio for memcached for the three runs; the number of data points with 95th percentile latency $>$ 1ms, as a fraction of the total number of data points. The SLO violation ratio should be calculated during the time from when the first batch-job-container starts running to when the last batch-job-container stops running.  \\
 
     \begin{table}[ht]
@@ -31,6 +37,8 @@
     \textbf{Plots:} % Place your plots here.
     \\
         
+
+    % QUESTION b
     \item \textbf{[17 points]} Describe and justify the “optimal” scheduling policy you have designed. 
     
     \begin{itemize}
@@ -105,11 +113,17 @@
         \textbf{Answer:} % Place your solution here
         \\
     
+
     \end{itemize}
     \end{enumerate}
+
+
+    % PART 2
     \item \textbf{[34 points]} Describe and analyze the AI-generated policy. [TODO: Xiaozhe]
 
     \begin{enumerate}
+
+        % QUESTION a
         \item \textbf{[17 points]} \textbf{Report the performance}:
         
         \begin{itemize}
@@ -138,6 +152,8 @@
     
     \textbf{Answer:}
     \end{itemize}
+
+    % QUESTION b
     \item \textbf{[17 points]} Analysis of the Evolutionary Process: Describe the process of how you used OpenEvolve to design the AI-generated policy. For example, you can include the following details in your answer (You are not limited to these questions. You can include any other details you find relevant and interesting). Your response will be graded based on the thoroughness of the exploration and clarity in explanation:
         
         \begin{itemize}
