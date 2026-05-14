@@ -11,23 +11,31 @@ colors as the placement bars.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+os.environ.setdefault("MPLBACKEND", "Agg")
+os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "cca-matplotlib"))
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 
 
-RUNS_DIR = Path(
-    r"C:/Users/User/Desktop/ETH/MSc/1 Semester/CCA/risultatiPart3_windows/Matte/automation/runs/part3-PartA"
+RUNS_ROOT = Path(
+    r"C:/Users/User/Desktop/ETH/MSc/1 Semester/CCA/risultatiPart3 WIN/Matte/automation/runs"
 )
+FINAL_RUNS_DIR = RUNS_ROOT / "part3-PartA"
+HANDCRAFTED_RUNS_DIR = RUNS_ROOT / "part3-handcrafted"
 OUT_DIR = Path(__file__).resolve().parent
 
-RUN_IDS = [
+FINAL_RUN_IDS = [
     "2026-05-10-02h28m11s",
     "2026-05-10-02h34m13s",
     "2026-05-10-02h40m25s",
 ]
+AGGRESSIVE_RUN_ID = "2026-04-27-07h02m33s"
 
 JOB_ORDER = [
     "barnes",
@@ -50,7 +58,7 @@ JOB_COLOR = {
 }
 MEMCACHED_COLOR = "#8f8f8f"
 
-JOB_CORES = {
+FINAL_JOB_CORES = {
     "streamcluster": ("node-a-8core", range(0, 8)),
     "freqmine": ("node-a-8core", range(0, 8)),
     "vips": ("node-a-8core", range(0, 6)),
@@ -58,6 +66,16 @@ JOB_CORES = {
     "blackscholes": ("node-b-4core", range(1, 4)),
     "canneal": ("node-b-4core", range(1, 4)),
     "barnes": ("node-b-4core", range(1, 4)),
+}
+
+AGGRESSIVE_JOB_CORES = {
+    "streamcluster": ("node-a-8core", range(0, 4)),
+    "freqmine": ("node-a-8core", range(4, 8)),
+    "barnes": ("node-a-8core", range(4, 8)),
+    "radix": ("node-a-8core", range(4, 8)),
+    "canneal": ("node-b-4core", range(1, 4)),
+    "blackscholes": ("node-b-4core", range(1, 4)),
+    "vips": ("node-b-4core", range(1, 4)),
 }
 
 NODE_CORES = {
@@ -72,8 +90,8 @@ def parse_iso_seconds(value: str) -> float:
     return datetime.fromisoformat(value).replace(tzinfo=timezone.utc).timestamp()
 
 
-def load_jobs_from_results(run_id: str) -> dict[str, dict[str, object]]:
-    path = RUNS_DIR / run_id / "results.json"
+def load_jobs_from_results(runs_dir: Path, run_id: str) -> dict[str, dict[str, object]]:
+    path = runs_dir / run_id / "results.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     jobs: dict[str, dict[str, object]] = {}
     for item in payload["items"]:
@@ -95,8 +113,8 @@ def load_jobs_from_results(run_id: str) -> dict[str, dict[str, object]]:
     return jobs
 
 
-def load_mcperf_samples(run_id: str) -> list[dict[str, float]]:
-    path = RUNS_DIR / run_id / "mcperf.txt"
+def load_mcperf_samples(runs_dir: Path, run_id: str) -> list[dict[str, float]]:
+    path = runs_dir / run_id / "mcperf.txt"
     lines = path.read_text(encoding="utf-8").splitlines()
     header = lines[0].split()
     indexes = {name: i for i, name in enumerate(header)}
@@ -176,6 +194,7 @@ def draw_node_axis(
     *,
     node: str,
     jobs: dict[str, dict[str, object]],
+    job_cores: dict[str, tuple[str, range]],
     t0: float,
     t1: float,
 ) -> None:
@@ -206,7 +225,7 @@ def draw_node_axis(
         )
 
     for job in JOB_ORDER:
-        node_for_job, cores = JOB_CORES[job]
+        node_for_job, cores = job_cores[job]
         if node_for_job != node:
             continue
         info = jobs[job]
@@ -249,9 +268,16 @@ def draw_node_axis(
     ax.grid(False, axis="x")
 
 
-def plot_run(run_id: str, index: int) -> None:
-    jobs = load_jobs_from_results(run_id)
-    samples = load_mcperf_samples(run_id)
+def plot_run(
+    *,
+    runs_dir: Path,
+    run_id: str,
+    title: str,
+    output_name: str,
+    job_cores: dict[str, tuple[str, range]],
+) -> None:
+    jobs = load_jobs_from_results(runs_dir, run_id)
+    samples = load_mcperf_samples(runs_dir, run_id)
 
     start_times = [parse_iso_seconds(str(info["started_at"])) for info in jobs.values()]
     finish_times = [parse_iso_seconds(str(info["finished_at"])) for info in jobs.values()]
@@ -275,8 +301,8 @@ def plot_run(run_id: str, index: int) -> None:
     node_b_ax = fig.add_subplot(grid[2], sharex=latency_ax)
 
     violations, in_window, _mean_p95 = draw_latency_axis(latency_ax, samples, t0, t1)
-    draw_node_axis(node_a_ax, node="node-a-8core", jobs=jobs, t0=t0, t1=t1)
-    draw_node_axis(node_b_ax, node="node-b-4core", jobs=jobs, t0=t0, t1=t1)
+    draw_node_axis(node_a_ax, node="node-a-8core", jobs=jobs, job_cores=job_cores, t0=t0, t1=t1)
+    draw_node_axis(node_b_ax, node="node-b-4core", jobs=jobs, job_cores=job_cores, t0=t0, t1=t1)
 
     for job in JOB_ORDER:
         info = jobs[job]
@@ -302,7 +328,7 @@ def plot_run(run_id: str, index: int) -> None:
 
     max_p95 = max(sample["p95_ms"] for sample in samples)
     latency_ax.set_title(
-        f"Run {index}: {run_id}, makespan {makespan:.0f} s, "
+        f"{title}: makespan {makespan:.0f} s, "
         f"max p95 {max_p95:.3f} ms, SLO violations {violations}/{in_window}"
     )
 
@@ -318,15 +344,29 @@ def plot_run(run_id: str, index: int) -> None:
     )
     fig.subplots_adjust(left=0.08, right=0.985, top=0.92, bottom=0.13)
 
-    output = OUT_DIR / f"cx_part3_q1a_run{index}.png"
+    output = OUT_DIR / output_name
     fig.savefig(output, dpi=220)
     plt.close(fig)
     print(f"wrote {output}")
 
 
 def main() -> None:
-    for index, run_id in enumerate(RUN_IDS, start=1):
-        plot_run(run_id, index)
+    for index, run_id in enumerate(FINAL_RUN_IDS, start=1):
+        plot_run(
+            runs_dir=FINAL_RUNS_DIR,
+            run_id=run_id,
+            title=f"Run {index}",
+            output_name=f"cx_part3_q1a_run{index}.png",
+            job_cores=FINAL_JOB_CORES,
+        )
+
+    plot_run(
+        runs_dir=HANDCRAFTED_RUNS_DIR,
+        run_id=AGGRESSIVE_RUN_ID,
+        title="Aggressive split-on-node-A candidate",
+        output_name="cx_part3_q1b_aggressive_candidate.png",
+        job_cores=AGGRESSIVE_JOB_CORES,
+    )
 
 
 if __name__ == "__main__":

@@ -38,20 +38,23 @@
 
     \begin{figure}[H]
         \centering
-        \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run1.png}
-        {\small Run~1. Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
+        \includegraphics[height=0.65\linewidth]{figures/cx_part3_q1a_run1.png}
+        \par\vspace{0.15em}
+        {\small Run~1. Memcached p95 latency and per-core placement; the red dashed line marks the \(1\,\mathrm{ms}\) SLO.\par}
+
+        \vspace{2em}
+
+        \includegraphics[height=0.65\linewidth]{figures/cx_part3_q1a_run2.png}
+        \par\vspace{0.15em}
+        {\small Run~2. Memcached p95 latency and per-core placement; the red dashed line marks the \(1\,\mathrm{ms}\) SLO.\par}
     \end{figure}
 
     \begin{figure}[H]
         \centering
-        \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run2.png}
-        {\small Run~2. Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
-    \end{figure}
-
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run3.png}
-        {\small Run~3. Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
+        \includegraphics[height=0.65\linewidth]{figures/cx_part3_q1a_run3.png}
+        \par\vspace{0.15em}
+        {\small Run~3. Memcached p95 latency and per-core placement; the red dashed line marks the \(1\,\mathrm{ms}\) SLO.\par}
+        \vspace{2em}
     \end{figure}
     % QUESTION b
     \item \textbf{[17 points]} Describe and justify the “optimal” scheduling policy you have designed. 
@@ -324,11 +327,13 @@
         collisions, and missing runtime estimates. The same running statistics
         are used by the web interface for creating new scheduling policies and
         by the run viewer for visualizing past executions as horizontal
-        timelines. The Kubernetes mechanisms themselves remain simple:
+        timelines; screenshots of both views are included in the appendix.
+
+        The Kubernetes mechanisms themselves remain simple:
         \texttt{nodeSelector} binds memcached and each batch job to the intended
         logical node type; Kubernetes Pods run memcached and the image pre-cache
-        steps; Kubernetes Jobs run the PARSEC/SPLASH-2x batch containers; and
-        managed labels make cleanup and collection reproducible. Kubernetes
+        steps; Kubernetes Jobs run the PARSEC and SPLASH-2x batch containers;
+        and managed labels make cleanup and collection reproducible. Kubernetes
         decides VM placement through labels and selectors, while the actual
         per-core isolation is done inside the container command with
         \texttt{taskset}.
@@ -372,6 +377,16 @@
         the same VM, making the runtime more dependent on shared cache state and
         on the cloud platform conditions at that time of day.
 
+        \begin{figure}[H]
+            \centering
+            \includegraphics[width=\linewidth]{figures/cx_part3_q1b_aggressive_candidate.png}
+            {\small Best observed execution of the aggressive split-on-node-A
+            candidate. This run reached \(222\,\mathrm{s}\) with zero SLO
+            violations, but later repetitions of the same idea were slower and
+            less stable.}
+            \vspace{2em}
+        \end{figure}
+
         We therefore selected the more conservative final hand-crafted policy.
         It gives the full node A to \colored{streamcluster} and then to
         \colored{freqmine}, moves \colored{barnes} to the three batch cores on
@@ -389,7 +404,7 @@
 
     \end{itemize}
     \end{enumerate}
-
+\newpage
 
     % PART 2
     \item \textbf{[34 points]} Describe and analyze the AI-generated policy. [TODO: Xiaozhe]
