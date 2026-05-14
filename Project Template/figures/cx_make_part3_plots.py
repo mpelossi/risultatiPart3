@@ -190,7 +190,7 @@ def draw_latency_axis(ax, samples: list[dict[str, float]], t0: float, t1: float)
         )
     mean_p95 = p95_sum / in_window if in_window else 0.0
     ax.axhline(1.0, color="#d62728", linestyle=(0, (5, 5)), linewidth=1.2)
-    ax.text(t1 - t0, 1.02, "1 ms", ha="right", va="bottom", color="#d62728")
+    ax.text(t1 - t0 + 9, 1.02, "1 ms", ha="right", va="bottom", color="#d62728")
     ax.axhline(mean_p95, color="#1f6b3a", linestyle=(0, (2, 3)), linewidth=1.0)
     ax.text(
         t1 - t0,
@@ -422,7 +422,7 @@ def plot_run(
         bbox_to_anchor=(0.5, 0.01),
         fontsize=9,
     )
-    fig.subplots_adjust(left=0.08, right=0.985, top=0.92, bottom=0.13)
+    fig.subplots_adjust(left=0.08, right=0.96, top=0.92, bottom=0.13)
 
     output = OUT_DIR / output_name
     fig.savefig(output, dpi=220)
