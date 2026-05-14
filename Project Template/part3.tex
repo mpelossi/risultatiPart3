@@ -27,7 +27,7 @@
         \end{tabular}
     \end{table}
 
-    \textbf{Answer:} The values in the table are computed from the container \texttt{startedAt} and \texttt{finishedAt} timestamps in \texttt{results.json}. In the augmented \texttt{mcperf} output, \texttt{ts\_start} and \texttt{ts\_end} are Unix epoch timestamps in milliseconds that bound the measurement interval represented by one p95 latency row. All three executions completed the seven batch jobs successfully. During the interval from the first batch container start to the last batch container finish, no measured memcached p95 sample exceeded the \(1\,\mathrm{ms}\) SLO; the resulting SLO violation ratio is \(0.000\).
+    \textbf{Answer:} The values in the table are computed from the container \texttt{startedAt} and \texttt{finishedAt} timestamps in \texttt{results.json}. In the augmented \texttt{mcperf} output, \texttt{ts\_start} and \texttt{ts\_end} are Unix epoch timestamps in milliseconds that bound the measurement interval represented by one p95 latency row. All three executions completed the seven batch jobs successfully. During the interval from the first batch container start to the last batch container finish, no measured memcached p95 sample exceeded the \(1\,\mathrm{ms}\) SLO; the resulting SLO violation ratio is \(0\).
     \\
     
     Create 3 bar plots (one for each run) of memcached p95 latency (y-axis) over time (x-axis), with annotations showing when each batch job started and ended, also indicating the machine each of them is running on. Using the augmented version of mcperf, you get two additional columns in the output: \texttt{ts\_start} and \texttt{ts\_end}. Use them to determine the width of each bar in the bar plot, while the height should represent the p95 latency. Align the $x$ axis so that $x=0$ coincides with the starting time of the first container. 
@@ -407,7 +407,7 @@
 \newpage
 
     % PART 2
-    \item \textbf{[34 points]} Describe and analyze the AI-generated policy. [TODO: Xiaozhe]
+    \item \textbf{[34 points]} Describe and analyze the AI-generated policy.
 
     \begin{enumerate}
 
@@ -419,28 +419,68 @@
         
         \begin{table}[ht]
             \centering
-            \begin{tabular}{ |c|c|c|c|c|} 
+            \begin{tabular}{ |c|c|c|} 
                 \hline
                 job name & mean time [s] (Baseline) & mean time [s] (AI) \\ \hline \hline
-                \coloredcell{barnes}          & & \\  \hline
-                \coloredcell{blackscholes}    & & \\  \hline
-                \coloredcell{canneal}         & & \\  \hline
-                \coloredcell{freqmine}        & & \\  \hline
-                \coloredcell{radix}           & & \\  \hline
-                \coloredcell{streamcluster}   & & \\  \hline
-                \coloredcell{vips}            & & \\  \hline
-                total time      & & \\  \hline
+                \coloredcell{barnes}          & 63.33 & 54.33 \\  \hline
+                \coloredcell{blackscholes}    & 47.67 & 46.67 \\  \hline
+                \coloredcell{canneal}         & 107.33 & 115.00 \\  \hline
+                \coloredcell{freqmine}        & 67.33 & 116.00 \\  \hline
+                \coloredcell{radix}           & 20.67 & 10.33 \\  \hline
+                \coloredcell{streamcluster}   & 113.33 & 155.33 \\  \hline
+                \coloredcell{vips}            & 21.33 & 16.33 \\  \hline
+                total time      & 232.33 & 197.33 \\  \hline
             \end{tabular}
         \end{table}
 
+        \textbf{Answer:} The baseline column repeats the mean runtimes from the
+        hand-crafted policy measurements. The AI column is computed from the
+        three final AI-policy executions using completed container runtimes; all
+        seven batch jobs completed successfully in each run. Across the full
+        interval from the first batch container start to the last batch
+        container finish, the memcached p95 latency never exceeded the
+        \(1\,\mathrm{ms}\) SLO. The SLO violation ratio is therefore
+        \(0/63 = 0\).
+        \vspace{2em}
+
     \item Create 3 bar plots (one for each run), for the final AI-generated policy, of memcached p95 latency (y-axis) over time (x-axis), with annotations showing when each batch job started and ended, also indicating the machine each of them is running on. Use the same method as described in the previous question to create the bar plots.
+        
+
     
-    \textbf{Answer:}
+    \vspace{2em}
+    \textbf{Answer:} The following plots use relative time, with \(x=0\)
+    aligned to the first batch-container start in each run. Solid vertical
+    markers show job starts, dotted vertical markers show job finishes, and the
+    labels on the placement bars include the measured job durations.
+
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2a_ai_run1.png}
+        \par\vspace{0.15em}
+        {\small Run~1. AI-generated policy: memcached p95 latency and per-core placement; the red dashed line marks the \(1\,\mathrm{ms}\) SLO.\par}
+
+        \vspace{1em}
+
+        \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2a_ai_run2.png}
+        \par\vspace{0.15em}
+        {\small Run~2. AI-generated policy: memcached p95 latency and per-core placement; the red dashed line marks the \(1\,\mathrm{ms}\) SLO.\par}
+    \end{figure}
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2a_ai_run3.png}
+        \par\vspace{0.15em}
+        {\small Run~3. AI-generated policy: memcached p95 latency and per-core placement; the red dashed line marks the \(1\,\mathrm{ms}\) SLO.\par}
+        \vspace{2em}
+    \end{figure}
+
     \item Create two line plots (one for the p95 latency and one for SLO violations) showing policy performance over iterations.
     
     \textbf{Answer:}
     \end{itemize}
-
+TODO TODO TODO     
+TODO TODO TODO
     % QUESTION b
     \item \textbf{[17 points]} Analysis of the Evolutionary Process: Describe the process of how you used OpenEvolve to design the AI-generated policy. For example, you can include the following details in your answer (You are not limited to these questions. You can include any other details you find relevant and interesting). Your response will be graded based on the thoroughness of the exploration and clarity in explanation:
         

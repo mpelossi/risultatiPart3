@@ -27,8 +27,9 @@ RUNS_ROOT = Path(
     r"C:/Users/User/Desktop/ETH/MSc/1 Semester/CCA/risultatiPart3 WIN/Matte/automation/runs"
 )
 FINAL_RUNS_DIR = RUNS_ROOT / "part3-PartA"
+AI_RUNS_DIR = RUNS_ROOT / "part3-PartB"
 HANDCRAFTED_RUNS_DIR = RUNS_ROOT / "part3-handcrafted"
-OUT_DIR = Path(__file__).resolve().parent
+OUT_DIR = Path(__file__).resolve().parent / "part3"
 
 FINAL_RUN_IDS = [
     "2026-05-10-02h28m11s",
@@ -36,6 +37,11 @@ FINAL_RUN_IDS = [
     "2026-05-10-02h40m25s",
 ]
 AGGRESSIVE_RUN_ID = "2026-04-27-07h02m33s"
+AI_RUN_IDS = [
+    "2026-05-09-15h15m46s",
+    "2026-05-09-15h21m20s",
+    "2026-05-09-15h26m52s",
+]
 
 JOB_ORDER = [
     "barnes",
@@ -76,6 +82,16 @@ AGGRESSIVE_JOB_CORES = {
     "canneal": ("node-b-4core", range(1, 4)),
     "blackscholes": ("node-b-4core", range(1, 4)),
     "vips": ("node-b-4core", range(1, 4)),
+}
+
+AI_JOB_CORES = {
+    "barnes": ("node-a-8core", range(0, 4)),
+    "freqmine": ("node-a-8core", range(0, 4)),
+    "streamcluster": ("node-a-8core", range(4, 8)),
+    "radix": ("node-a-8core", range(4, 8)),
+    "vips": ("node-a-8core", range(0, 8)),
+    "canneal": ("node-b-4core", range(1, 4)),
+    "blackscholes": ("node-b-4core", range(1, 4)),
 }
 
 NODE_CORES = {
@@ -138,7 +154,7 @@ def text_color(background: str) -> str:
     green = int(background[3:5], 16) / 255.0
     blue = int(background[5:7], 16) / 255.0
     luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-    return "black" if luminance > 0.52 else "white"
+    return "black" if luminance > 0.00 else "white"
 
 
 def configure_time_axis(ax, makespan: float) -> None:
@@ -197,6 +213,7 @@ def draw_node_axis(
     job_cores: dict[str, tuple[str, range]],
     t0: float,
     t1: float,
+    annotate_durations: bool = False,
 ) -> None:
     cores_desc = sorted(NODE_CORES[node], reverse=True)
     y_by_core = {core: index for index, core in enumerate(cores_desc)}
@@ -242,21 +259,29 @@ def draw_node_axis(
                 linewidth=0.7,
             )
         core_list = list(cores)
-        y_center = (y_by_core[core_list[0]] + y_by_core[core_list[-1]]) / 2.0
+        y_offset = 0.0
+        
+        if (len(cores))%2 == 0:
+            print("even cores, applying offset" , max(cores))
+            y_offset = 0.5
+            
+        y_center = (y_by_core[core_list[0]] + y_by_core[core_list[-1]]) / 2.0 + (- y_offset) 
         x_center = (start + finish) / 2.0
         width = finish - start
-        rotation = 90 if width < 28 else 0
-        label_size = 8 if width < 28 else 9
+        rotation = 90 if width < 10 else 0
+        label_size = 10 if width < 28 else 12
+        label = f"{job} ({width:.0f}s)" if annotate_durations else job
         ax.text(
             x_center,
-            y_center,
-            job,
+            y_center ,
+            label,
             ha="center",
             va="center",
             rotation=rotation,
             color=text_color(JOB_COLOR[job]),
             fontsize=label_size,
             fontweight="bold",
+            zorder=4
         )
 
     prefix = "a" if node == "node-a-8core" else "b"
@@ -268,6 +293,41 @@ def draw_node_axis(
     ax.grid(False, axis="x")
 
 
+def draw_time_labels(
+    ax,
+    jobs: dict[str, dict[str, object]],
+    t0: float,
+) -> None:
+    events: list[tuple[float, str, str]] = []
+    for job in JOB_ORDER:
+        info = jobs[job]
+        start = parse_iso_seconds(str(info["started_at"])) - t0
+        finish = parse_iso_seconds(str(info["finished_at"])) - t0
+        events.append((start, f"{start:.0f}s", JOB_COLOR[job]))
+        events.append((finish, f"{finish:.0f}s", JOB_COLOR[job]))
+
+    previous_x: float | None = None
+    level = 0
+    for x, label, color in sorted(events):
+        if previous_x is not None and x - previous_x < 5:
+            level = (level + 1) % 4
+        else:
+            level = 0
+        previous_x = x
+        ax.text(
+            x - 2,
+            1.105 - level * 0.055,
+            label,
+            ha="center",
+            va="top",
+            rotation=90,
+            color=color,
+            fontsize=10,
+            fontweight="bold",
+            zorder=4,
+        )
+
+
 def plot_run(
     *,
     runs_dir: Path,
@@ -275,6 +335,7 @@ def plot_run(
     title: str,
     output_name: str,
     job_cores: dict[str, tuple[str, range]],
+    annotate_details: bool = False,
 ) -> None:
     jobs = load_jobs_from_results(runs_dir, run_id)
     samples = load_mcperf_samples(runs_dir, run_id)
@@ -301,8 +362,24 @@ def plot_run(
     node_b_ax = fig.add_subplot(grid[2], sharex=latency_ax)
 
     violations, in_window, _mean_p95 = draw_latency_axis(latency_ax, samples, t0, t1)
-    draw_node_axis(node_a_ax, node="node-a-8core", jobs=jobs, job_cores=job_cores, t0=t0, t1=t1)
-    draw_node_axis(node_b_ax, node="node-b-4core", jobs=jobs, job_cores=job_cores, t0=t0, t1=t1)
+    draw_node_axis(
+        node_a_ax,
+        node="node-a-8core",
+        jobs=jobs,
+        job_cores=job_cores,
+        t0=t0,
+        t1=t1,
+        annotate_durations=annotate_details,
+    )
+    draw_node_axis(
+        node_b_ax,
+        node="node-b-4core",
+        jobs=jobs,
+        job_cores=job_cores,
+        t0=t0,
+        t1=t1,
+        annotate_durations=annotate_details,
+    )
 
     for job in JOB_ORDER:
         info = jobs[job]
@@ -319,6 +396,9 @@ def plot_run(
                 linestyle="dotted",
                 zorder=3,
             )
+
+    if annotate_details:
+        draw_time_labels(latency_ax, jobs, t0)
 
     for axis in (latency_ax, node_a_ax, node_b_ax):
         configure_time_axis(axis, makespan)
@@ -351,6 +431,8 @@ def plot_run(
 
 
 def main() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
     for index, run_id in enumerate(FINAL_RUN_IDS, start=1):
         plot_run(
             runs_dir=FINAL_RUNS_DIR,
@@ -358,6 +440,7 @@ def main() -> None:
             title=f"Run {index}",
             output_name=f"cx_part3_q1a_run{index}.png",
             job_cores=FINAL_JOB_CORES,
+             annotate_details=True,
         )
 
     plot_run(
@@ -366,7 +449,18 @@ def main() -> None:
         title="Aggressive split-on-node-A candidate",
         output_name="cx_part3_q1b_aggressive_candidate.png",
         job_cores=AGGRESSIVE_JOB_CORES,
+         annotate_details=True,
     )
+
+    for index, run_id in enumerate(AI_RUN_IDS, start=1):
+        plot_run(
+            runs_dir=AI_RUNS_DIR,
+            run_id=run_id,
+            title=f"Run {index}",
+            output_name=f"cx_part3_q2a_ai_run{index}.png",
+            job_cores=AI_JOB_CORES,
+            annotate_details=True,
+        )
 
 
 if __name__ == "__main__":
