@@ -39,19 +39,19 @@
     \begin{figure}[H]
         \centering
         \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run1.png}
-        {\small Run~1 (\texttt{2026-05-10-02h28m11s}). Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
+        {\small Run~1. Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
     \end{figure}
 
     \begin{figure}[H]
         \centering
         \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run2.png}
-        {\small Run~2 (\texttt{2026-05-10-02h34m13s}). Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
+        {\small Run~2. Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
     \end{figure}
 
     \begin{figure}[H]
         \centering
         \includegraphics[width=\linewidth]{figures/cx_part3_q1a_run3.png}
-        {\small Run~3 (\texttt{2026-05-10-02h40m25s}). Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
+        {\small Run~3. Memcached p95 latency over time and per-core placement on \texttt{node-a-8core} and \texttt{node-b-4core}. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.}
     \end{figure}
     % QUESTION b
     \item \textbf{[17 points]} Describe and justify the “optimal” scheduling policy you have designed. 
@@ -86,11 +86,9 @@
         did not want memcached to compete directly for a core, for L1d/L1i, or
         for L2 with a batch job. Pinning it to core~\texttt{0} on the AMD Milan
         node gave us a stronger and more predictable latency-critical core, and
-        cores~\texttt{1-3} remained available for the node-B job chain. Across
-        the selected three runs of \texttt{testFinal2}
-        (\texttt{2026-05-10-02h28m11s}, \texttt{2026-05-10-02h34m13s}, and
-        \texttt{2026-05-10-02h40m25s}), this placement produced zero memcached
-        SLO violations.
+        cores~\texttt{1-3} remained available for the node-B job sequence.
+        Across the three selected final-policy runs, this placement produced
+        zero memcached SLO violations.
         \\
 
         \item Which node does each of the 7 batch jobs run on? Why?
@@ -138,13 +136,15 @@
             
             \item \colored{radix}: \texttt{radix} runs on
             \texttt{node-a-8core}, pinned to cores~\texttt{6-7}, with 2
-            threads, after \texttt{freqmine}. \texttt{radix} scales well, but
-            it is also a relatively short job in the final policy. During
-            experimentation we noticed that short jobs can become bounded by
-            container startup time, even when their pure benchmark time improves
-            with more cores. For that reason, we colocate \texttt{radix} with
-            \texttt{vips} at the tail of node A instead of giving it the whole
-            machine sequentially.
+            threads, after \texttt{freqmine}. During experimentation we
+            discovered that \texttt{radix} was a highly unpredictable and
+            unstable job. We therefore never schedule it on
+            \texttt{node-b-4core}, because it can crash the 4-core, 4\,GB VM.
+            We also restrict its thread count to a power-of-two value from
+            \(\{1,2,4,8\}\), because non-power-of-two thread counts can make it
+            crash. The final schedule uses 2 threads, which satisfies this
+            constraint and lets \texttt{radix} share the tail of
+            \texttt{node-a-8core} with \texttt{vips} on disjoint cores.
             
             \item \colored{streamcluster}: \texttt{streamcluster} runs on
             \texttt{node-a-8core}, pinned to cores~\texttt{0-7}, with 8
@@ -168,16 +168,17 @@
 
         \item Which jobs run concurrently / are colocated? Why?
 
-        \textbf{Answer:} The final policy is a two-chain schedule with one
-        explicit tail colocation. At time zero, \colored{streamcluster} runs on
-        \texttt{node-a-8core} using cores~\texttt{0-7}, while
-        \colored{blackscholes} runs on \texttt{node-b-4core} using
-        cores~\texttt{1-3}. These two jobs are concurrent, but they are on
-        different machines, and memcached remains isolated on node-B
+        \textbf{Answer:} The final policy runs two sequential job streams in
+        parallel, one per benchmark node, with one explicit same-node overlap at
+        the tail. At time zero, \colored{streamcluster} starts on
+        \texttt{node-a-8core} using cores~\texttt{0-7}; at the same time,
+        \colored{blackscholes} starts on \texttt{node-b-4core} using
+        cores~\texttt{1-3}. They overlap in time, but they are not colocated:
+        they run on different machines, and memcached remains isolated on node-B
         core~\texttt{0}.
 
         After \colored{streamcluster} finishes, \colored{freqmine} runs on the
-        full 8-core node A. In parallel with this node-A chain, node B continues
+        full 8-core node A. In parallel with this node-A sequence, node B continues
         with \colored{canneal} after \colored{blackscholes}, and then
         \colored{barnes} after \colored{canneal}. The only batch jobs colocated
         on the same machine at the same time are \colored{vips} and
@@ -186,7 +187,9 @@
         \texttt{node-a-8core}. We chose this colocation because both jobs are at
         the tail of the schedule and, in our empirical experimentation, their
         end-to-end benefit from running one after the other on more cores was
-        reduced by the roughly 6\,s container startup overhead. Running them
+        reduced by the roughly 6\,s container startup overhead. Keeping
+        \colored{radix} on node A also avoids the instability we observed when
+        trying to run it on the 4-core, 4\,GB node. Running the two jobs
         together on disjoint cores shortens the tail without making jobs compete
         for the same core.
         \\
@@ -242,10 +245,12 @@
             threads.
             
             \item \colored{radix}: 2 threads, pinned to
-            cores~\texttt{6-7} on \texttt{node-a-8core}. Although
-            \texttt{radix} can scale well, in this schedule it is a short tail
-            job, so we use two cores and run it concurrently with
-            \texttt{vips}.
+            cores~\texttt{6-7} on \texttt{node-a-8core}. This choice is not
+            only a performance choice, but also a stability constraint:
+            \texttt{radix} must use one of \(\{1,2,4,8\}\) threads and should
+            not be scheduled on \texttt{node-b-4core}. Two threads are enough
+            for the tail overlap with \texttt{vips}, while staying inside the
+            safe power-of-two thread set.
            
             \item \colored{streamcluster}: 8 threads, pinned to
             cores~\texttt{0-7} on \texttt{node-a-8core}. This was the strongest
@@ -267,8 +272,7 @@
         user-data for the client machines so that the augmented
         \texttt{mcperf} tooling and the load-agent services were installed and
         started automatically. The scheduling policy itself was represented in
-        YAML policy files; the selected measured policy is
-        \texttt{testFinal2}.
+        YAML policy files and then rendered into per-run Kubernetes manifests.
 
         The Kubernetes features we used were deliberately simple: node labels
         and \texttt{nodeSelector} fields to force each pod onto the intended VM,
@@ -304,15 +308,16 @@
         better than launching them sequentially with larger thread counts.
 
         Compared with earlier explored policies that used more aggressive or
-        less balanced overlap, \texttt{testFinal2} is more conservative and more
-        robust. It gives up some possible parallelism, but it keeps memcached on
-        a dedicated core, avoids overcommitting cores, and consistently produces
-        zero SLO violations in the selected three runs. Its measured makespan
-        over the three selected executions was \(232.33\,\mathrm{s}\) on
-        average, with all seven batch jobs completing successfully. This is why
-        we selected it as the final hand-crafted policy: it is not only fast
-        enough, but also stable and easy to justify from the hardware and
-        interference observations.
+        less balanced overlap, the final hand-crafted policy is more
+        conservative and more robust. It gives up some possible parallelism, but
+        it keeps memcached on a dedicated core, avoids overcommitting cores,
+        keeps \colored{radix} away from the unstable node-B placement, and
+        consistently produces zero SLO violations in the selected three runs.
+        Its measured makespan over the three selected executions was
+        \(232.33\,\mathrm{s}\) on average, with all seven batch jobs completing
+        successfully. This is why we selected it as the final hand-crafted
+        policy: it is not only fast enough, but also stable and easy to justify
+        from the hardware and interference observations.
         \\
     
 
