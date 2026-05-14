@@ -269,59 +269,121 @@
 
         \item Which files did you modify or add and in what way? Which Kubernetes features did you use?
     
-        \textbf{Answer:} We modified \texttt{part3.yaml} to define the final
-        cluster shape, including the two benchmark nodes
-        \texttt{node-a-8core} and \texttt{node-b-4core}, their machine types,
-        and their identifying Kubernetes node labels. We also added bootstrap
-        user-data for the client machines so that the augmented
-        \texttt{mcperf} tooling and the load-agent services were installed and
-        started automatically. The scheduling policy itself was represented in
-        YAML policy files and then rendered into per-run Kubernetes manifests.
+        \textbf{Answer:} Besides the final policy YAML files, the main addition
+        was a Python automation layer for the whole Part~3 workflow. We built it
+        because, before this, the workflow was mostly manual: creating or
+        validating the cluster, entering VMs by SSH, finding IP addresses,
+        checking whether the client machines had finished bootstrapping,
+        building the client-side \texttt{mcperf} tooling, running every
+        \texttt{kubectl} command, and collecting the outputs all had to be done
+        by hand. The automation therefore became the coordination script for the
+        experiment.
 
-        The Kubernetes features we used were deliberately simple: node labels
-        and \texttt{nodeSelector} fields to force each pod onto the intended VM,
-        Kubernetes Jobs/Pods to run each PARSEC/SPLASH-2x batch container, and
-        explicit CPU affinity inside the container command via \texttt{taskset}.
-        The policy controller launched jobs according to the \texttt{after}
-        dependencies in the YAML file, which gave us a small sequential DAG over
-        the seven batch jobs.
+        We also modified \texttt{part3.yaml}. This file defines the kOps
+        instance groups for the benchmark machines, including the
+        \texttt{e2-standard-8} \texttt{node-a-8core} machine and the
+        \texttt{n2d-highcpu-4} \texttt{node-b-4core} machine. It also contains
+        the kOps \texttt{additional}\allowbreak\texttt{UserData} bootstrap
+        scripts for the client machines, which install the needed build
+        dependencies, build the augmented \texttt{mcperf} tool, and start the
+        long-lived load-agent services. The actual stable naming of the
+        machines is then handled by the Python code: since kOps creates
+        Kubernetes node names with a random suffix, the automation discovers the
+        real nodes, maps them back to logical aliases such as
+        \texttt{node-a-8core} and \texttt{node-b-4core}, and applies or repairs
+        the canonical project node-type labels before running a policy.
+
+        The scheduling decisions themselves were kept in YAML policy files.
+        This made the policy declarative: for each job the file states the
+        target node, the pinned core range, the thread count, and the
+        \texttt{after} dependency. The Python controller validates the policy
+        before spending time on a run, especially checking that thread counts do
+        not exceed the number of pinned cores. It then acts as an asynchronous
+        DAG scheduler: it launches all jobs in a phase that is ready, keeps
+        polling Kubernetes for the state of the already launched Jobs, records
+        when their completion conditions are satisfied, and only then starts the
+        dependent phases. This let us express both parallel starts and
+        sequential dependencies without manually watching pods and launching the
+        next command by hand.
+
+        Around this scheduler we also automated cluster deployment and
+        validation, SSH/IP discovery for the clients, container image pre-caching before
+        the benchmark suite, policy queues for trying multiple schedules, result
+        collection, log collection, and summary generation. Each run stores the
+        rendered Kubernetes manifests, the policy snapshot, the phase plan, the
+        raw pod snapshot, the \texttt{mcperf} output, logs, and a summarized
+        result. This was a major quality-of-life improvement for
+        reproducibility, because a run could be repeated from the same policy
+        file instead of being reconstructed from a sequence of manual SSH and
+        \texttt{kubectl} commands.
+
+        We also added validation and visualization tools around this workflow.
+        The audit code contains a rudimentary resource-contention checker: it
+        uses the Part~2 speedup/runtime measurements and the running statistics
+        collected from previous runs to warn about suspicious overlaps, core
+        collisions, and missing runtime estimates. The same running statistics
+        are used by the web interface for creating new scheduling policies and
+        by the run viewer for visualizing past executions as horizontal
+        timelines. The Kubernetes mechanisms themselves remain simple:
+        \texttt{nodeSelector} binds memcached and each batch job to the intended
+        logical node type; Kubernetes Pods run memcached and the image pre-cache
+        steps; Kubernetes Jobs run the PARSEC/SPLASH-2x batch containers; and
+        managed labels make cleanup and collection reproducible. Kubernetes
+        decides VM placement through labels and selectors, while the actual
+        per-core isolation is done inside the container command with
+        \texttt{taskset}.
         \\
     
         \item Describe the design choices, ideas and trade-offs you took into account while creating your scheduler (\underline{if not already mentioned above}). Describe how your policy (and its performance) compares to another policy that you experimented with (in particular to the second-best policy that you designed).
 
         \textbf{Answer:} The most important design choice was to keep the policy
         simple and constrained. We decided not to explore simultaneous
-        multithreading or hyperthreading policies. This means that we did not
-        test policies where multiple jobs compete on the same core, and we did
-        not use thread counts larger than the number of pinned cores. This
-        reduced the search space and also matched the lessons from Part~1 and
-        Part~2: the dangerous interference sources for memcached were CPU and
-        private/shared cache effects, especially L1d, L1i, L2, and LLC misses.
-        Therefore, the scheduler avoids direct core sharing and uses disjoint
-        core sets whenever jobs overlap.
+        multithreading or hyperthreading policies: we did not test schedules
+        where two jobs compete on the same core, and we did not use a thread
+        count larger than the number of pinned cores. This reduced the search
+        space and matched the lessons from Part~1 and Part~2. Memcached was
+        much more vulnerable to CPU and cache interference than to pure DRAM
+        bandwidth pressure, and the batch jobs also showed strong sensitivity to
+        L1d, L1i, L2, and LLC effects. Therefore, whenever two jobs overlap, the
+        selected final policy keeps their core sets disjoint.
 
-        Another trade-off was between using all 8 cores for every scalable job
-        and keeping the overall makespan short. Some jobs, such as
-        \colored{streamcluster} and \colored{freqmine}, clearly deserved the
-        full 8-core node because their 4-to-8-thread speedup was significant and
-        their runtime was long enough to affect the critical path. Other jobs,
-        especially short tail jobs, were affected by container startup time. We
-        measured this overhead to be about 6\,s when the image was already
-        cached. This changed the decision for the tail of the schedule: running
-        \colored{vips} and \colored{radix} concurrently on disjoint cores was
-        better than launching them sequentially with larger thread counts.
+        Another trade-off was between giving the full 8-core node to every
+        scalable job and reducing the overall makespan. Jobs such as
+        \colored{streamcluster} and \colored{freqmine} deserved the full
+        \texttt{node-a-8core} machine because their 4-to-8-thread speedup was
+        significant and their runtime was long enough to affect the critical
+        path. For shorter tail jobs, however, the container startup time became
+        visible in the end-to-end time. We measured this overhead at about
+        6\,s when the image was already cached. This changed the tail decision:
+        running \colored{vips} and \colored{radix} concurrently on disjoint
+        node-A cores was better than launching both sequentially just to give
+        each one more cores.
 
-        Compared with earlier explored policies that used more aggressive or
-        less balanced overlap, the final hand-crafted policy is more
-        conservative and more robust. It gives up some possible parallelism, but
-        it keeps memcached on a dedicated core, avoids overcommitting cores,
-        keeps \colored{radix} away from the unstable node-B placement, and
-        consistently produces zero SLO violations in the selected three runs.
-        Its measured makespan over the three selected executions was
-        \(232.33\,\mathrm{s}\) on average, with all seven batch jobs completing
-        successfully. This is why we selected it as the final hand-crafted
-        policy: it is not only fast enough, but also stable and easy to justify
-        from the hardware and interference observations.
+        The closest competing policy we designed was the aggressive
+        split-on-node-A candidate. It kept memcached on \texttt{node-b-4core}
+        but split \texttt{node-a-8core} into two 4-core regions:
+        \colored{streamcluster} ran on one half, while \colored{freqmine},
+        \colored{barnes}, and \colored{radix} used the other half in sequence.
+        On one occasion this policy produced the best observed makespan,
+        \(222\,\mathrm{s}\), with zero SLO violations. However, this result was
+        not as reproducible as the final policy. In later repetitions the same
+        aggressive design was closer to \(235\)--\(236\,\mathrm{s}\), and the
+        long \colored{streamcluster} run overlapped with several other jobs on
+        the same VM, making the runtime more dependent on shared cache state and
+        on the cloud platform conditions at that time of day.
+
+        We therefore selected the more conservative final hand-crafted policy.
+        It gives the full node A to \colored{streamcluster} and then to
+        \colored{freqmine}, moves \colored{barnes} to the three batch cores on
+        node B, and only overlaps \colored{vips} with \colored{radix} at the
+        tail on disjoint node-A cores. It also keeps \colored{radix} away from
+        the unstable node-B placement and uses a safe power-of-two thread count.
+        The selected final policy was slightly less aggressive than the best
+        single observed run of the competing policy, but across the three
+        selected executions it had a mean makespan of \(232.33\,\mathrm{s}\),
+        a standard deviation of \(3.06\,\mathrm{s}\), and zero memcached SLO
+        violations. We chose it because it was fast, easy to reason about, and
+        more stable across repeated runs.
         \\
     
 
