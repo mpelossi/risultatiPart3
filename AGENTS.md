@@ -16,4 +16,4 @@ IMPORTANT UNDERSTAND ALL OF THE IMPORTANT RULES AND LESSONS DESCRIBED IN @submis
 
 
 you can read the ENTIRE assingment, (not only part 3) 
-in [assignment.md](c:/Users/User/Desktop/ETH/MSc/1 Semester/CCA/risultatiPart3_windows/Matte/context/assignment.md) 
+in [assignment.md]/context/assignment.md
