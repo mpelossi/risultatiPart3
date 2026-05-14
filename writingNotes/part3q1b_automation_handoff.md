@@ -59,8 +59,32 @@ Mention concrete Kubernetes mechanisms rather than only saying "scheduler":
 - Bootstrap `additionalUserData` scripts for client machines, especially mcperf build/install and `mcperf-agent.service`.
 
 ## Second-Best Policy Exploration
+and improving the last question answer.
+
+"Describe how your policy (and its
+performance) compares to another policy that you experimented with (in particular
+to the second-best policy that you designed)."
+
 
 The next agent should also analyze the second-best policy, internally named `split-brain-NodeA`.
+
+i ran some runs named
+2026-05-09-16h12m47s
+2026-05-09-14h52m35s
+2026-05-10-02h03m48s
+2026-05-10-02h15m53s
+
+but they're all high makespan.
+
+the reason i want you to mention this second best is 
+that on the directory /part3-handcrafted we had run 
+2026-04-27-07h02m33s
+
+which had our best makespan of 222s
+
+but the day after at another time of day the makespan was completely different, with stream cluster running concurrently with 3 other jobs freqmine barnes and radix.
+This colocation might make the run times highly unpredictable because of share cached states.
+BUT ON ONE OCCASION IT GAVE US THE BEST OVERALL score of 222s.
 
 Primary path:
 

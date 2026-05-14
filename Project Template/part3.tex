@@ -168,30 +168,34 @@
 
         \item Which jobs run concurrently / are colocated? Why?
 
-        \textbf{Answer:} The final policy runs two sequential job streams in
-        parallel, one per benchmark node, with one explicit same-node overlap at
-        the tail. At time zero, \colored{streamcluster} starts on
-        \texttt{node-a-8core} using cores~\texttt{0-7}; at the same time,
-        \colored{blackscholes} starts on \texttt{node-b-4core} using
-        cores~\texttt{1-3}. They overlap in time, but they are not colocated:
-        they run on different machines, and memcached remains isolated on node-B
-        core~\texttt{0}.
+        \textbf{Answer:} We use ``concurrent'' to mean that two jobs overlap in
+        time, and ``colocated'' to mean that they overlap on the same VM.
+        Concurrency across different VMs is mainly a makespan choice: it does
+        not create direct CPU-cache contention between the two batch jobs, but
+        it keeps both paid benchmark nodes busy. Colocation is the more delicate
+        decision, because colocated jobs can compete for cores, caches, memory
+        bandwidth, and memory capacity.
 
-        After \colored{streamcluster} finishes, \colored{freqmine} runs on the
-        full 8-core node A. In parallel with this node-A sequence, node B continues
-        with \colored{canneal} after \colored{blackscholes}, and then
-        \colored{barnes} after \colored{canneal}. The only batch jobs colocated
-        on the same machine at the same time are \colored{vips} and
-        \colored{radix}: both start after \colored{freqmine}; \colored{vips}
-        uses cores~\texttt{0-5} and \colored{radix} uses cores~\texttt{6-7} on
-        \texttt{node-a-8core}. We chose this colocation because both jobs are at
-        the tail of the schedule and, in our empirical experimentation, their
-        end-to-end benefit from running one after the other on more cores was
-        reduced by the roughly 6\,s container startup overhead. Keeping
-        \colored{radix} on node A also avoids the instability we observed when
-        trying to run it on the 4-core, 4\,GB node. Running the two jobs
-        together on disjoint cores shortens the tail without making jobs compete
-        for the same core.
+        With this distinction, the final policy runs the node-A and node-B work
+        streams at the same time only to avoid leaving a machine idle. On
+        \texttt{node-a-8core}, \colored{streamcluster} runs first on the full
+        8-core machine, followed by \colored{freqmine} on the full 8-core
+        machine. On \texttt{node-b-4core}, \colored{blackscholes},
+        \colored{canneal}, and \colored{barnes} run sequentially on
+        cores~\texttt{1-3}, while memcached stays isolated on core~\texttt{0}.
+
+        The only intentional same-node batch colocation is at the tail:
+        \colored{vips} and \colored{radix} both start after
+        \colored{freqmine} on \texttt{node-a-8core}. \colored{vips} uses
+        cores~\texttt{0-5}, while \colored{radix} uses cores~\texttt{6-7}.
+        We chose this colocation because both jobs are short tail jobs and, in
+        our empirical experimentation, running them one after the other gave
+        little end-to-end benefit once the roughly 6\,s container startup
+        overhead was included. Keeping \colored{radix} on node A also avoids the
+        instability we observed when trying to run it on the 4-core, 4\,GB node.
+        Thus, the policy allows overlap when it reduces idle time, but avoids
+        same-core competition and uses same-node colocation only once, with
+        disjoint core sets.
         \\
 
         \item In which order did you run the 7 batch jobs? Why?
