@@ -182,3 +182,8 @@ spec:
   - europe-west1-b
 
 
+radix jobs was discovered to be a highly unpredictable and unstable job.
+
+these two things were discovered during experimentation 
+    - NEVER schedule radix on node-b-4core. It crashes the 4-core 4GB VM.
+    - radix.threads must be exactly one of {1, 2, 4, 8}. Radix can crash with non-power-of-two thread counts.

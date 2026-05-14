@@ -59,42 +59,161 @@
     \begin{itemize}
         \item Which node does memcached run on? Why?
 
-        \textbf{Answer:} % Place your solution here.
+        \textbf{Answer:} Memcached runs on \texttt{node-b-4core}, pinned to
+        core~\texttt{0} with one server thread. The reasoning behind the
+        placement of the memcached pod is multifaceted. The first constraint
+        that immediately came to our attention was the physical shape of the two
+        benchmark machines. By analyzing \texttt{part3.yaml}, we noticed that
+        the two VMs request different resources and have different shapes:
+        \texttt{node-a-8core} is an \texttt{e2-standard-8} machine, while
+        \texttt{node-b-4core} is an \texttt{n2d-highcpu-4} machine.
+        The \texttt{e2} shape has a less predictable CPU allocation: it can map
+        to slower Intel CPUs or to a faster AMD Rome CPU. In our captured logs,
+        however, the 8-core VM was consistently assigned AMD Rome. The second
+        node, \texttt{node-b-4core}, was an \texttt{n2d} high-CPU machine and in
+        our experiments was consistently assigned AMD Milan. The most important
+        difference is therefore not only the number of cores, but also the
+        memory density and CPU shape: \texttt{node-a-8core} has 8 cores and
+        about 32\,GB of memory, while \texttt{node-b-4core} has only 4 cores and
+        about 4\,GB of memory.
+
+        Given this information, we tried to build the policy using only the
+        knowledge extracted from Part~1 and Part~2. From Part~1, the immediate
+        observation was that memcached was less susceptible to DRAM bandwidth
+        interference than to CPU and cache interference. This made it reasonable
+        to keep memcached on a single isolated core, while allowing the remaining
+        three cores of the same machine to execute batch jobs sequentially. We
+        did not want memcached to compete directly for a core, for L1d/L1i, or
+        for L2 with a batch job. Pinning it to core~\texttt{0} on the AMD Milan
+        node gave us a stronger and more predictable latency-critical core, and
+        cores~\texttt{1-3} remained available for the node-B job chain. Across
+        the selected three runs of \texttt{testFinal2}
+        (\texttt{2026-05-10-02h28m11s}, \texttt{2026-05-10-02h34m13s}, and
+        \texttt{2026-05-10-02h40m25s}), this placement produced zero memcached
+        SLO violations.
         \\
 
         \item Which node does each of the 7 batch jobs run on? Why?
 
         \textbf{Answer:}
         \begin{itemize}
-            \item \colored{barnes}: % Place your solution here .
+            \item \colored{barnes}: \texttt{barnes} runs on
+            \texttt{node-b-4core}, pinned to cores~\texttt{1-3}, with 3
+            threads. We place it at the end of the node-B chain, after
+            \texttt{canneal}. Although \texttt{barnes} benefits from more cores,
+            it is also cache-sensitive, especially to LLC pressure. At this
+            point in the schedule, \texttt{node-a-8core} is already used by the
+            final \texttt{vips}+\texttt{radix} overlap, while
+            \texttt{node-b-4core} has three isolated batch cores available next
+            to the memcached core. Running \texttt{barnes} there avoids adding a
+            third job to node A and keeps the policy simple and reproducible.
             
-            \item \colored{blackscholes}: % Place your solution here.
+            \item \colored{blackscholes}: \texttt{blackscholes} runs on
+            \texttt{node-b-4core}, pinned to cores~\texttt{1-3}, with 3
+            threads. This is one of the safest jobs to place next to memcached:
+            from Part~2 it showed only moderate interference sensitivity, and
+            from the speedup experiment it did not gain much from going from 4
+            to 8 threads. Therefore it is a good first job for the 3-core
+            node-B batch region, while memcached remains isolated on
+            core~\texttt{0}.
             
-            \item \colored{canneal}: % Place your solution here.
+            \item \colored{canneal}: \texttt{canneal} runs on
+            \texttt{node-b-4core}, pinned to cores~\texttt{1-3}, with 3
+            threads, after \texttt{blackscholes}. \texttt{canneal} is memory
+            and LLC sensitive, but it also has poor scalability compared with
+            the jobs that benefit most from all 8 cores. Since the second
+            machine has only three batch cores once memcached is allocated, we
+            use it for jobs where the opportunity cost of not using 8 cores is
+            lower. The measured runs confirmed that this placement stayed within
+            the memcached SLO.
             
-            \item \colored{freqmine}: % Place your solution here.
+            \item \colored{freqmine}: \texttt{freqmine} runs on
+            \texttt{node-a-8core}, pinned to cores~\texttt{0-7}, with 8
+            threads, after \texttt{streamcluster}. From Part~2,
+            \texttt{freqmine} has a significant speedup at high thread counts,
+            especially from 4 to 8 threads. It also has irregular control flow
+            and cache pressure, so we preferred not to colocate it with
+            memcached. Giving it the full 8-core node reduces the critical path
+            without risking direct interference on memcached's private caches.
             
-            \item \colored{radix}: % Place your solution here.
+            \item \colored{radix}: \texttt{radix} runs on
+            \texttt{node-a-8core}, pinned to cores~\texttt{6-7}, with 2
+            threads, after \texttt{freqmine}. \texttt{radix} scales well, but
+            it is also a relatively short job in the final policy. During
+            experimentation we noticed that short jobs can become bounded by
+            container startup time, even when their pure benchmark time improves
+            with more cores. For that reason, we colocate \texttt{radix} with
+            \texttt{vips} at the tail of node A instead of giving it the whole
+            machine sequentially.
             
-            \item \colored{streamcluster}: % Place your solution here.
+            \item \colored{streamcluster}: \texttt{streamcluster} runs on
+            \texttt{node-a-8core}, pinned to cores~\texttt{0-7}, with 8
+            threads, and starts immediately. This job showed the strongest
+            scalability in Part~2, so the 8-core node is the natural place for
+            it. Starting it first also makes sense because it is one of the
+            longest jobs in the workflow; delaying it would directly increase
+            the makespan.
             
-            \item \colored{vips}: % Place your solution here.
+            \item \colored{vips}: \texttt{vips} runs on
+            \texttt{node-a-8core}, pinned to cores~\texttt{0-5}, with 6
+            threads, after \texttt{freqmine}. \texttt{vips} benefits from
+            parallelism but has diminishing returns at high thread counts, so
+            six cores are enough to make it short while leaving cores
+            \texttt{6-7} for \texttt{radix}. This is the only intentional
+            batch-job colocation in the final tail of the schedule, and the two
+            jobs use disjoint core sets.
             \\
             
         \end{itemize}
 
         \item Which jobs run concurrently / are colocated? Why?
 
-        \textbf{Answer:} % Place your solution here.
+        \textbf{Answer:} The final policy is a two-chain schedule with one
+        explicit tail colocation. At time zero, \colored{streamcluster} runs on
+        \texttt{node-a-8core} using cores~\texttt{0-7}, while
+        \colored{blackscholes} runs on \texttt{node-b-4core} using
+        cores~\texttt{1-3}. These two jobs are concurrent, but they are on
+        different machines, and memcached remains isolated on node-B
+        core~\texttt{0}.
+
+        After \colored{streamcluster} finishes, \colored{freqmine} runs on the
+        full 8-core node A. In parallel with this node-A chain, node B continues
+        with \colored{canneal} after \colored{blackscholes}, and then
+        \colored{barnes} after \colored{canneal}. The only batch jobs colocated
+        on the same machine at the same time are \colored{vips} and
+        \colored{radix}: both start after \colored{freqmine}; \colored{vips}
+        uses cores~\texttt{0-5} and \colored{radix} uses cores~\texttt{6-7} on
+        \texttt{node-a-8core}. We chose this colocation because both jobs are at
+        the tail of the schedule and, in our empirical experimentation, their
+        end-to-end benefit from running one after the other on more cores was
+        reduced by the roughly 6\,s container startup overhead. Running them
+        together on disjoint cores shortens the tail without making jobs compete
+        for the same core.
         \\
 
         \item In which order did you run the 7 batch jobs? Why?
     
-        \textbf{Order (to be sorted)}: % Sort them 
-        \colored{barnes}, \colored{blackscholes}, \colored{canneal}, \colored{freqmine}, \colored{radix}, \colored{streamcluster}, \colored{vips}
+        \textbf{Order}: \colored{streamcluster} and \colored{blackscholes}
+        start first. Then \colored{freqmine} starts after
+        \colored{streamcluster}, while \colored{canneal} starts after
+        \colored{blackscholes}. Finally, \colored{vips} and \colored{radix}
+        start together after \colored{freqmine}, and \colored{barnes} starts
+        after \colored{canneal}.
     
     
-        \textbf{Why}: % Place your solution here.
+        \textbf{Why}: The order is chosen to keep both machines busy while
+        respecting the different strengths of the two nodes. The higher core
+        count of \texttt{node-a-8core} is used first for the jobs with the
+        clearest 8-thread benefit: \colored{streamcluster} and then
+        \colored{freqmine}. On the other side, after allocating one core to
+        memcached, \texttt{node-b-4core} only has three batch cores available,
+        so it runs a sequential chain of 3-thread jobs:
+        \colored{blackscholes}, \colored{canneal}, and \colored{barnes}. The
+        tail of the schedule is then compressed by running \colored{vips} and
+        \colored{radix} concurrently on disjoint node-A cores. This ordering was
+        a direct consequence of the Part~2 speedup results and of the practical
+        observation that container startup time becomes important for short
+        jobs.
         \\
 
         \item How many threads have you used for each of the 7 batch jobs? Why?
@@ -102,30 +221,98 @@
         \textbf{Answer:}
     
         \begin{itemize}
-            \item \colored{barnes}: % Place your solution here. 
+            \item \colored{barnes}: 3 threads, pinned to
+            cores~\texttt{1-3} on \texttt{node-b-4core}. This matches the
+            available batch cores on node B while keeping memcached isolated on
+            core~\texttt{0}.
             
-            \item \colored{blackscholes}: % Place your solution here.
+            \item \colored{blackscholes}: 3 threads, pinned to
+            cores~\texttt{1-3} on \texttt{node-b-4core}. This job does not gain
+            enough from 8 threads to justify using node A, so three threads are
+            the natural choice on the memcached node.
             
-            \item \colored{canneal}: % Place your solution here.
+            \item \colored{canneal}: 3 threads, pinned to
+            cores~\texttt{1-3} on \texttt{node-b-4core}. Its scalability is
+            limited by memory/cache behavior, so we avoid spending the full
+            8-core machine on it in the final policy.
             
-            \item \colored{freqmine}: % Place your solution here.
+            \item \colored{freqmine}: 8 threads, pinned to
+            cores~\texttt{0-7} on \texttt{node-a-8core}. The Part~2 speedup
+            experiment showed that it benefits significantly from the jump to 8
+            threads.
             
-            \item \colored{radix}: % Place your solution here.
+            \item \colored{radix}: 2 threads, pinned to
+            cores~\texttt{6-7} on \texttt{node-a-8core}. Although
+            \texttt{radix} can scale well, in this schedule it is a short tail
+            job, so we use two cores and run it concurrently with
+            \texttt{vips}.
            
-            \item \colored{streamcluster}: % Place your solution here.
+            \item \colored{streamcluster}: 8 threads, pinned to
+            cores~\texttt{0-7} on \texttt{node-a-8core}. This was the strongest
+            scaling workload in Part~2, so it receives the full 8-core node.
             
-            \item \colored{vips}: % Place your solution here.
+            \item \colored{vips}: 6 threads, pinned to
+            cores~\texttt{0-5} on \texttt{node-a-8core}. Six threads preserve
+            most of the parallel benefit while leaving two disjoint cores for
+            \texttt{radix}.
             \\
         \end{itemize}
 
         \item Which files did you modify or add and in what way? Which Kubernetes features did you use?
     
-        \textbf{Answer:} % Place your solution here.
+        \textbf{Answer:} We modified \texttt{part3.yaml} to define the final
+        cluster shape, including the two benchmark nodes
+        \texttt{node-a-8core} and \texttt{node-b-4core}, their machine types,
+        and their identifying Kubernetes node labels. We also added bootstrap
+        user-data for the client machines so that the augmented
+        \texttt{mcperf} tooling and the load-agent services were installed and
+        started automatically. The scheduling policy itself was represented in
+        YAML policy files; the selected measured policy is
+        \texttt{testFinal2}.
+
+        The Kubernetes features we used were deliberately simple: node labels
+        and \texttt{nodeSelector} fields to force each pod onto the intended VM,
+        Kubernetes Jobs/Pods to run each PARSEC/SPLASH-2x batch container, and
+        explicit CPU affinity inside the container command via \texttt{taskset}.
+        The policy controller launched jobs according to the \texttt{after}
+        dependencies in the YAML file, which gave us a small sequential DAG over
+        the seven batch jobs.
         \\
     
         \item Describe the design choices, ideas and trade-offs you took into account while creating your scheduler (\underline{if not already mentioned above}). Describe how your policy (and its performance) compares to another policy that you experimented with (in particular to the second-best policy that you designed).
 
-        \textbf{Answer:} % Place your solution here
+        \textbf{Answer:} The most important design choice was to keep the policy
+        simple and constrained. We decided not to explore simultaneous
+        multithreading or hyperthreading policies. This means that we did not
+        test policies where multiple jobs compete on the same core, and we did
+        not use thread counts larger than the number of pinned cores. This
+        reduced the search space and also matched the lessons from Part~1 and
+        Part~2: the dangerous interference sources for memcached were CPU and
+        private/shared cache effects, especially L1d, L1i, L2, and LLC misses.
+        Therefore, the scheduler avoids direct core sharing and uses disjoint
+        core sets whenever jobs overlap.
+
+        Another trade-off was between using all 8 cores for every scalable job
+        and keeping the overall makespan short. Some jobs, such as
+        \colored{streamcluster} and \colored{freqmine}, clearly deserved the
+        full 8-core node because their 4-to-8-thread speedup was significant and
+        their runtime was long enough to affect the critical path. Other jobs,
+        especially short tail jobs, were affected by container startup time. We
+        measured this overhead to be about 6\,s when the image was already
+        cached. This changed the decision for the tail of the schedule: running
+        \colored{vips} and \colored{radix} concurrently on disjoint cores was
+        better than launching them sequentially with larger thread counts.
+
+        Compared with earlier explored policies that used more aggressive or
+        less balanced overlap, \texttt{testFinal2} is more conservative and more
+        robust. It gives up some possible parallelism, but it keeps memcached on
+        a dedicated core, avoids overcommitting cores, and consistently produces
+        zero SLO violations in the selected three runs. Its measured makespan
+        over the three selected executions was \(232.33\,\mathrm{s}\) on
+        average, with all seven batch jobs completing successfully. This is why
+        we selected it as the final hand-crafted policy: it is not only fast
+        enough, but also stable and easy to justify from the hardware and
+        interference observations.
         \\
     
 
