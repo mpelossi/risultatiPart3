@@ -15,5 +15,6 @@ NO FLUFF: Avoid dramatic or typical AI-sounding vocabulary (e.g., "delve", "tape
 IMPORTANT UNDERSTAND ALL OF THE IMPORTANT RULES AND LESSONS DESCRIBED IN @submissionRules.md
 
 
+
 you can read the ENTIRE assingment, (not only part 3) 
 in [assignment.md]/context/assignment.md
