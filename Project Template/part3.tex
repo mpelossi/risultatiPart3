@@ -517,6 +517,192 @@
         \end{itemize}
 
          \textbf{Answer:}
+         We used OpenEvolve as a constrained scheduling-policy search, not as an
+         unconstrained code generator. The benchmarked run used
+         \texttt{moonshotai/Kimi-K2.5} and ran through iteration~20, with
+         iteration~0 treated as the seed. We chose Kimi K2.5 because it was a
+         large reasoning-capable model available to us, and because this task
+         required the model to reason about a dependency graph, pinned cores, and
+         a latency constraint at the same time. We also tried a later GLM~5.1
+         experiment, but it was operationally unreliable for this workflow: the
+         model produced much longer thinking traces, OpenEvolve counted those
+         thinking tokens toward the response budget, and the run hit repeated
+         timeout/provider problems. The final policy in the report therefore
+         comes from the Kimi run. The three Kimi log files are also a symptom of
+         this process: we restarted/reconfigured the run while dealing with
+         max-token accounting for model reasoning tokens.
+
+         A useful part of the setup was that the automation harness from the
+         earlier work reduced the LLM's job to emitting a structured policy
+         dictionary. The system prompt told the model that it was acting as a
+         cloud-infrastructure scheduler whose goal was to minimize makespan for
+         seven batch jobs while keeping memcached below a strict
+         \(1\,\mathrm{ms}\) p95 SLO at 30K QPS. The model could only edit the
+         dictionary inside the OpenEvolve evolve block, and each candidate had to
+         define \texttt{policy\_name}, \texttt{memcached}, and \texttt{jobs}.
+         Each job specified \texttt{node}, \texttt{cores}, \texttt{threads}, and
+         \texttt{after}; same-node concurrent jobs were not allowed to overlap
+         cores; memcached had to keep a dedicated isolated core; and
+         \texttt{radix} was forbidden on the 4-core node. The prompt also encoded
+         empirical guidance from Parts~1--2, for example that \texttt{canneal} is
+         cache-sensitive, \texttt{blackscholes} is relatively safe near
+         memcached, and \texttt{streamcluster}, \texttt{radix}, \texttt{barnes},
+         and \texttt{vips} can use the larger node well. The harness then
+         validated the candidate, launched the Kubernetes experiment, collected
+         \texttt{mcperf} and job timings, and returned a compact
+         \texttt{summary.json} to OpenEvolve.
+
+         The success metric was implemented in
+         \texttt{part3\_openEvolve/evaluator.py}. It was designed to make SLO
+         safety a hard requirement, while still allowing OpenEvolve to compare
+         good policies by makespan. For a policy that passed validation and
+         completed the run, the evaluator used
+         \[
+             \texttt{combined\_score}
+             = 10000 - \mathrm{makespan\_s}
+             - \frac{\max(0,\mathrm{max\_p95\_us}-850)}{10}.
+         \]
+         The \(850\,\mu\mathrm{s}\) threshold is a safety buffer below the
+         \(1\,\mathrm{ms}\) SLO. The division by 10 is the chosen scaling: every
+         \(10\,\mu\mathrm{s}\) above that buffer costs one score point, so tail
+         latency remains visible in the objective without dominating makespan
+         once the policy is far below the SLO. If a run failed due to SLO
+         violations, the evaluator moved it into a much lower score band,
+         \(1000-\mathrm{makespan\_s}-50\cdot\mathrm{slo\_violations}\), and
+         invalid or failed policies received negative scores. In the successful
+         Kimi trajectory, all of the important saved candidates had zero SLO
+         violations and p95 latency well below \(1\,\mathrm{ms}\), so the search
+         was effectively optimizing the batch critical path after satisfying the
+         latency constraint.
+
+         The initial policy was a handcrafted policy similar to our second-best
+         handcrafted schedule. We used it because it was already legal and
+         latency-safe, but it contained one intentional challenge for OpenEvolve:
+         node~B became under-utilized after its initial chain. The seed placed
+         memcached on \texttt{node-b-4core} core~0, ran \texttt{canneal}
+         \(\rightarrow\) \texttt{barnes} on the remaining node-B cores, ran
+         \texttt{streamcluster} \(\rightarrow\) \texttt{radix} on one 4-core
+         lane of \texttt{node-a-8core}, and ran \texttt{freqmine}
+         \(\rightarrow\) \texttt{vips} \(\rightarrow\) \texttt{blackscholes} on
+         the other 4-core lane of node~A. This seed scored 9777, with makespan
+         \(223\,\mathrm{s}\), max p95 \(380.2\,\mu\mathrm{s}\), and zero SLO
+         violations. The tempting fix would have been moving \texttt{radix} to
+         node~B, but that move was forbidden because \texttt{radix} crashed on
+         the 4-core node. OpenEvolve therefore had to find a legal way to shorten
+         the critical path without using that shortcut.
+
+         \begin{figure}[H]
+            \centering
+            \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_iteration0_seed.png}
+            \par\vspace{0.15em}
+            {\small Initial OpenEvolve seed. The schedule is legal and latency-safe, but node~B becomes under-utilized after its initial chain; moving \texttt{radix} to node~B was not a legal fix.\par}
+            \vspace{1em}
+         \end{figure}
+
+         The evolution was not monotonic. The first generated candidate looked
+         more parallel on paper, but it was worse: iteration~1 scored 9714 and
+         increased makespan to \(286\,\mathrm{s}\), while still having zero SLO
+         violations. After that, the search recovered. Iteration~2 improved to
+         score 9786 and makespan \(214\,\mathrm{s}\); iteration~7 reached 9791
+         and \(209\,\mathrm{s}\); iteration~9 reached 9799 and
+         \(201\,\mathrm{s}\); and iteration~11 reached 9801 and
+         \(199\,\mathrm{s}\). The best policy was found at iteration~14, with
+         score 9802, makespan \(198\,\mathrm{s}\), max p95
+         \(398.1\,\mu\mathrm{s}\), and zero SLO violations. The run continued to
+         iteration~20, but later candidates did not beat this policy.
+
+         The final AI-generated policy improved makespan by changing the
+         dependency graph rather than by improving tail latency. Our final
+         handcrafted comparison schedule was roughly \texttt{streamcluster}
+         \(\rightarrow\) \texttt{freqmine} \(\rightarrow\)
+         \texttt{max(vips, radix)} on node~A and \texttt{blackscholes}
+         \(\rightarrow\) \texttt{canneal} \(\rightarrow\) \texttt{barnes} on
+         node~B. In repeated handcrafted runs, the node-B chain alone took about
+         \(45\)--\(51\,\mathrm{s}\) for \texttt{blackscholes},
+         \(106\)--\(109\,\mathrm{s}\) for \texttt{canneal}, and
+         \(62\)--\(65\,\mathrm{s}\) for \texttt{barnes}, giving a long serial
+         chain of roughly \(213\)--\(225\,\mathrm{s}\). The OpenEvolve policy
+         removed \texttt{barnes} from that node-B chain and moved it to node~A.
+         The resulting structure was two node-A lanes, \texttt{barnes}
+         \(\rightarrow\) \texttt{freqmine} and \texttt{streamcluster}
+         \(\rightarrow\) \texttt{radix}, while node~B ran only
+         \texttt{canneal} \(\rightarrow\) \texttt{blackscholes}; \texttt{vips}
+         then ran after both \texttt{freqmine} and \texttt{radix}. Some
+         individual node-A jobs became slower because they received fewer cores,
+         but the overall critical path was shorter and better balanced. This is
+         why the best OpenEvolve run reached \(198\,\mathrm{s}\), while our
+         repeated handcrafted runs were \(229\)--\(235\,\mathrm{s}\), with zero
+         SLO violations in both cases.
+
+         \begin{figure}[H]
+            \centering
+            \begin{minipage}{0.49\linewidth}
+                \centering
+                \includegraphics[width=\linewidth]{figures/part3/cx_part3_q1a_run3.png}
+                \par\vspace{0.15em}
+                {\small Handcrafted comparison run: makespan \(229\,\mathrm{s}\), max p95 \(375.2\,\mu\mathrm{s}\), SLO violations 0.\par}
+            \end{minipage}
+            \hfill
+            \begin{minipage}{0.49\linewidth}
+                \centering
+                \includegraphics[width=\linewidth]{figures/part3/cx_part3_q2a_ai_run1.png}
+                \par\vspace{0.15em}
+                {\small AI-generated policy run: makespan \(198\,\mathrm{s}\), max p95 \(409.9\,\mu\mathrm{s}\), SLO violations 0.\par}
+            \end{minipage}
+            \vspace{1em}
+         \end{figure}
+
+         The visualizer helped inspect this process, but we did not treat it as
+         the sole source of provenance. The two screenshots below show both the
+         descendant view and the generation/score view. The red edge in the
+         generation view should be read as the stored immediate
+         \texttt{parent\_id}, not as the complete set of programs that influenced
+         a new candidate. For example, the best node's stored parent points to a
+         lower-scoring immediate predecessor, but the metadata for the prompt also
+         contained previous/top programs and execution summaries. Therefore, to
+         reconstruct the process, we used the logs and per-program metadata in
+         addition to the visualizer edges.
+
+         \begin{figure}[H]
+            \centering
+            \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_descendants.png}
+            \par\vspace{0.15em}
+            {\small OpenEvolve descendant view for the Kimi run. The highlighted node is the best-scoring saved policy by \texttt{combined\_score}.\par}
+
+            \vspace{1em}
+
+            \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_generations.png}
+            \par\vspace{0.15em}
+            {\small OpenEvolve generation/score view. The red edge shows the stored immediate parent relation, but the policy metadata shows that candidate prompts can also include other previous or top programs as inspiration.\par}
+            \vspace{2em}
+         \end{figure}
+
+         One concrete logical flaw appeared in the first generated candidate. It
+         obeyed the schema and tried to parallelize aggressively, but it placed
+         only \texttt{canneal} on node~B while moving all other batch jobs to
+         node~A. This does not necessarily mean the model hallucinated. A
+         plausible explanation is that, before any measured summaries had been
+         fed back to OpenEvolve, the model over-prioritized protecting memcached
+         and therefore avoided colocating more than one batch job with it. We
+         also intentionally did not put detailed job-duration and speedup tables
+         in the system prompt, to avoid overwhelming the model with too much
+         information before the evolutionary loop had produced measurements.
+         The cost of that limited first prompt was visible in the evaluation:
+         compared with the seed, the score dropped from 9777 to 9714 and
+         makespan increased from \(223\) to \(286\,\mathrm{s}\), even though SLO
+         violations stayed at zero. Subsequent candidates had a better signal
+         because OpenEvolve fed them \texttt{summary.json}, a compact version of
+         the Kubernetes timing results from previous evaluations, so later
+         prompts included concrete makespans and job timings instead of only the
+         qualitative scheduling guidance.
+
+         \begin{figure}[H]
+            \centering
+            \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_iteration1_flaw.png}
+            \par\vspace{0.15em}
+            {\small Iteration~1 generated candidate. The candidate kept SLO violations at zero, but its node-A chain made makespan much worse: \(286\,\mathrm{s}\) instead of \(223\,\mathrm{s}\) for the seed.\par}
+            \vspace{2em}
+         \end{figure}
 
 
     \end{enumerate}

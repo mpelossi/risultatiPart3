@@ -22,6 +22,7 @@ os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "cca-mat
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import yaml
 
 
 RUNS_ROOT = Path(
@@ -48,6 +49,8 @@ AI_RUN_IDS = [
     "2026-05-09-15h21m20s",
     "2026-05-09-15h26m52s",
 ]
+OPENEVOLVE_SEED_RUN_ID = "2026-05-05-15h40m02s Iteration 0 = schedule7bis"
+OPENEVOLVE_FLAW_RUN_ID = "2026-05-05-15h49m27s"
 
 JOB_ORDER = [
     "barnes",
@@ -157,6 +160,29 @@ def load_mcperf_samples_from_run_dir(run_dir: Path) -> list[dict[str, float]]:
 
 def load_mcperf_samples(runs_dir: Path, run_id: str) -> list[dict[str, float]]:
     return load_mcperf_samples_from_run_dir(runs_dir / run_id)
+
+
+def parse_core_range(value: object) -> range:
+    raw = str(value).strip().strip("'\"")
+    if "-" in raw:
+        start_raw, end_raw = raw.split("-", 1)
+        start = int(start_raw)
+        end = int(end_raw)
+        return range(start, end + 1)
+    core = int(raw)
+    return range(core, core + 1)
+
+
+def load_job_cores_from_policy(run_dir: Path) -> dict[str, tuple[str, range]]:
+    policy = yaml.safe_load((run_dir / "policy.yaml").read_text(encoding="utf-8"))
+    jobs = policy.get("jobs", {})
+    result: dict[str, tuple[str, range]] = {}
+    for job in JOB_ORDER:
+        info = jobs.get(job)
+        if not isinstance(info, dict):
+            raise ValueError(f"{run_dir.name}: missing job {job} in policy.yaml")
+        result[job] = (str(info["node"]), parse_core_range(info["cores"]))
+    return result
 
 
 def _metric_value(payload: dict[str, object], key: str) -> float:
@@ -721,6 +747,24 @@ def main() -> None:
             job_cores=AI_JOB_CORES,
             annotate_details=True,
         )
+
+    plot_run(
+        runs_dir=OPENEVOLVE_EVAL_RUNS_DIR,
+        run_id=OPENEVOLVE_SEED_RUN_ID,
+        title="OpenEvolve iteration 0 seed",
+        output_name="cx_part3_q2b_openevolve_iteration0_seed.png",
+        job_cores=load_job_cores_from_policy(OPENEVOLVE_EVAL_RUNS_DIR / OPENEVOLVE_SEED_RUN_ID),
+        annotate_details=True,
+    )
+
+    plot_run(
+        runs_dir=OPENEVOLVE_EVAL_RUNS_DIR,
+        run_id=OPENEVOLVE_FLAW_RUN_ID,
+        title="OpenEvolve iteration 1 generated candidate",
+        output_name="cx_part3_q2b_openevolve_iteration1_flaw.png",
+        job_cores=load_job_cores_from_policy(OPENEVOLVE_EVAL_RUNS_DIR / OPENEVOLVE_FLAW_RUN_ID),
+        annotate_details=True,
+    )
 
     plot_openevolve_iterations()
 
