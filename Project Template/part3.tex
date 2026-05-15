@@ -501,6 +501,8 @@
         \includegraphics[width=1.1\linewidth]{figures/part3/cx_part3_q2a_openevolve_slo_score.png}
         \par\vspace{0.15em}
         {\small SLO violation count and \texttt{combined\_score} for each saved OpenEvolve policy evaluation. Higher score corresponds mainly to lower makespan because none of these candidates incurred a p95 penalty.\par}
+        \caption{OpenEvolve iteration metrics used to analyze the evolutionary process.}
+        \label{fig:openevolve-iteration-metrics}
         \vspace{2em}
     \end{figure}
     \end{itemize}
@@ -517,23 +519,30 @@
         \end{itemize}
 
          \textbf{Answer:}
+         \smallskip
+         \noindent\textbf{Iterations, LLMs, and search setup.}
          We used OpenEvolve as a constrained scheduling-policy search, not as an
          unconstrained code generator. The benchmarked run used
          \texttt{moonshotai/Kimi-K2.5} and ran through iteration~20, with
-         iteration~0 treated as the seed. We chose Kimi K2.5 because it was a
-         large reasoning-capable model available to us, and because this task
-         required the model to reason about a dependency graph, pinned cores, and
-         a latency constraint at the same time. We also tried a later GLM~5.1
-         experiment, but it was operationally unreliable for this workflow: the
-         model produced much longer thinking traces, OpenEvolve counted those
-         thinking tokens toward the response budget, and the run hit repeated
-         timeout/provider problems. The final policy in the report therefore
-         comes from the Kimi run. The three Kimi log files are also a symptom of
-         this process: we restarted/reconfigured the run while dealing with
-         max-token accounting for model reasoning tokens.
+         iteration~0 treated as the seed. We chose Kimi K2.5 because, at the
+         time of our experiment, it was one of the largest reasoning-capable
+         models available on the swiss AI platform, with about one trillion parameters. In the
+         benchmark summaries we considered, it was also ranked among the top 10
+         open-weight models and among the top 30 frontier models overall. Its
+         benchmark profile suggested strong scientific and agentic reasoning
+         ability, including reported scores of 88\% on GPQA Diamond, 39\% on
+         GDPval-AA, and 29\% on Humanity's Last Exam. This mattered because the
+         scheduling task required the model to reason about a dependency graph,
+         pinned cores, and a latency constraint at the same time. We also tried a
+         later GLM~5.1 experiment, but it was operationally unreliable for this
+         workflow: the model produced much longer thinking traces (up to 50k thinking tokens), OpenEvolve
+         counted those thinking tokens toward the response budget, and the run
+         hit repeated timeout/provider problems. The final policy in the report
+         therefore comes from the Kimi run, which didn't come without it's own problems. In fact the three Kimi log files are also a
+         symptom of the thinking budget timeouts, which we had to address with some restarts and reconfigurations.
 
-         A useful part of the setup was that the automation harness from the
-         earlier work reduced the LLM's job to emitting a structured policy
+         A essential part of the setup was the automation harness from the
+         prior exercise, which reduced the LLM's job to emitting a structured policy
          dictionary. The system prompt told the model that it was acting as a
          cloud-infrastructure scheduler whose goal was to minimize makespan for
          seven batch jobs while keeping memcached below a strict
@@ -552,29 +561,37 @@
          \texttt{mcperf} and job timings, and returned a compact
          \texttt{summary.json} to OpenEvolve.
 
+         \smallskip
+         \noindent\textbf{Success metric.}
          The success metric was implemented in
          \texttt{part3\_openEvolve/evaluator.py}. It was designed to make SLO
          safety a hard requirement, while still allowing OpenEvolve to compare
          good policies by makespan. For a policy that passed validation and
-         completed the run, the evaluator used
-         \[
-             \texttt{combined\_score}
+         completed the run, the evaluator used the passing score:
+            $$
+             \text{\texttt{combined\_score}}_{\mathrm{pass}}
              = 10000 - \mathrm{makespan\_s}
              - \frac{\max(0,\mathrm{max\_p95\_us}-850)}{10}.
-         \]
+            $$
          The \(850\,\mu\mathrm{s}\) threshold is a safety buffer below the
          \(1\,\mathrm{ms}\) SLO. The division by 10 is the chosen scaling: every
          \(10\,\mu\mathrm{s}\) above that buffer costs one score point, so tail
          latency remains visible in the objective without dominating makespan
          once the policy is far below the SLO. If a run failed due to SLO
-         violations, the evaluator moved it into a much lower score band,
-         \(1000-\mathrm{makespan\_s}-50\cdot\mathrm{slo\_violations}\), and
-         invalid or failed policies received negative scores. In the successful
+         violations, the evaluator moved it into a much lower score band:
+         $$
+         \text{\texttt{combined\_score}}_{\mathrm{slo\_fail}}
+         =
+         1000-\mathrm{makespan\_s}-50\cdot\mathrm{slo\_violations}.
+         $$
+         Invalid or failed policies received negative scores. In the successful
          Kimi trajectory, all of the important saved candidates had zero SLO
          violations and p95 latency well below \(1\,\mathrm{ms}\), so the search
          was effectively optimizing the batch critical path after satisfying the
          latency constraint.
 
+         \smallskip
+         \noindent\textbf{Initial policy.}
          The initial policy was a handcrafted policy similar to our second-best
          handcrafted schedule. We used it because it was already legal and
          latency-safe, but it contained one intentional challenge for OpenEvolve:
@@ -586,20 +603,27 @@
          \(\rightarrow\) \texttt{vips} \(\rightarrow\) \texttt{blackscholes} on
          the other 4-core lane of node~A. This seed scored 9777, with makespan
          \(223\,\mathrm{s}\), max p95 \(380.2\,\mu\mathrm{s}\), and zero SLO
-         violations. The tempting fix would have been moving \texttt{radix} to
-         node~B, but that move was forbidden because \texttt{radix} crashed on
-         the 4-core node. OpenEvolve therefore had to find a legal way to shorten
-         the critical path without using that shortcut.
+         violations. Figure~\ref{fig:openevolve-seed-policy} shows this
+         starting point visually. The tempting fix would have been moving
+         \texttt{radix} to node~B, but that move was forbidden because
+         \texttt{radix} crashed on the 4-core node. OpenEvolve therefore had to
+         find a legal way to shorten the critical path without using that
+         shortcut.
 
          \begin{figure}[H]
             \centering
             \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_iteration0_seed.png}
             \par\vspace{0.15em}
             {\small Initial OpenEvolve seed. The schedule is legal and latency-safe, but node~B becomes under-utilized after its initial chain; moving \texttt{radix} to node~B was not a legal fix.\par}
-            \vspace{1em}
+            \caption{Initial OpenEvolve seed policy.}
+            \label{fig:openevolve-seed-policy}
+            \vspace{0.5em}
          \end{figure}
 
-         The evolution was not monotonic. The first generated candidate looked
+         \smallskip
+         \noindent\textbf{Evolution of the policy.}
+         The evolution was not monotonic, as also visible in
+         Figure~\ref{fig:openevolve-iteration-metrics}. The first generated candidate looked
          more parallel on paper, but it was worse: iteration~1 scored 9714 and
          increased makespan to \(286\,\mathrm{s}\), while still having zero SLO
          violations. After that, the search recovered. Iteration~2 improved to
@@ -611,6 +635,36 @@
          \(398.1\,\mu\mathrm{s}\), and zero SLO violations. The run continued to
          iteration~20, but later candidates did not beat this policy.
 
+         The visualizer helped inspect this process, but we did not treat it as
+         the sole source of provenance. Figure~\ref{fig:openevolve-visualizer}
+         shows both the descendant view and the generation/score view. The red edge in the
+         generation view should be read as the stored immediate
+         \texttt{parent\_id}, not as the complete set of programs that influenced
+         a new candidate. For example, the best node's stored parent points to a
+         lower-scoring immediate predecessor, but the metadata for the prompt also
+         contained previous/top programs and execution summaries. Therefore, to
+         reconstruct the process, we used the logs and per-program metadata in
+         addition to the visualizer edges.
+
+
+  \begin{figure}[H]
+            \centering
+            \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_descendants.png}
+            \par\vspace{0.15em}
+            {\small OpenEvolve descendant view for the Kimi run. The highlighted node is the best-scoring saved policy by \texttt{combined\_score}.\par}
+
+            \vspace{1em}
+
+            \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_generations.png}
+            \par\vspace{0.15em}
+            {\small OpenEvolve generation/score view. The red edge shows the stored immediate parent relation, but the policy metadata shows that candidate prompts can also include other previous or top programs as inspiration.\par}
+            \caption{OpenEvolve visualizer views for the Kimi run.}
+            \label{fig:openevolve-visualizer}
+            \vspace{2em}
+         \end{figure}
+
+         \smallskip
+         \noindent\textbf{Why the final policy improved.}
          The final AI-generated policy improved makespan by changing the
          dependency graph rather than by improving tail latency. Our final
          handcrafted comparison schedule was roughly \texttt{streamcluster}
@@ -632,7 +686,9 @@
          but the overall critical path was shorter and better balanced. This is
          why the best OpenEvolve run reached \(198\,\mathrm{s}\), while our
          repeated handcrafted runs were \(229\)--\(235\,\mathrm{s}\), with zero
-         SLO violations in both cases.
+         SLO violations in both cases. Figure~\ref{fig:handcrafted-ai-comparison}
+         compares the final handcrafted and AI-generated placements side by
+         side.
 
          \begin{figure}[H]
             \centering
@@ -649,34 +705,16 @@
                 \par\vspace{0.15em}
                 {\small AI-generated policy run: makespan \(198\,\mathrm{s}\), max p95 \(409.9\,\mu\mathrm{s}\), SLO violations 0.\par}
             \end{minipage}
+            \caption{Side-by-side comparison of the final handcrafted policy and the AI-generated policy.}
+            \label{fig:handcrafted-ai-comparison}
             \vspace{1em}
          \end{figure}
 
-         The visualizer helped inspect this process, but we did not treat it as
-         the sole source of provenance. The two screenshots below show both the
-         descendant view and the generation/score view. The red edge in the
-         generation view should be read as the stored immediate
-         \texttt{parent\_id}, not as the complete set of programs that influenced
-         a new candidate. For example, the best node's stored parent points to a
-         lower-scoring immediate predecessor, but the metadata for the prompt also
-         contained previous/top programs and execution summaries. Therefore, to
-         reconstruct the process, we used the logs and per-program metadata in
-         addition to the visualizer edges.
 
-         \begin{figure}[H]
-            \centering
-            \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_descendants.png}
-            \par\vspace{0.15em}
-            {\small OpenEvolve descendant view for the Kimi run. The highlighted node is the best-scoring saved policy by \texttt{combined\_score}.\par}
+       
 
-            \vspace{1em}
-
-            \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_generations.png}
-            \par\vspace{0.15em}
-            {\small OpenEvolve generation/score view. The red edge shows the stored immediate parent relation, but the policy metadata shows that candidate prompts can also include other previous or top programs as inspiration.\par}
-            \vspace{2em}
-         \end{figure}
-
+         \smallskip
+         \noindent\textbf{Logical flaw and how it was identified.}
          One concrete logical flaw appeared in the first generated candidate. It
          obeyed the schema and tried to parallelize aggressively, but it placed
          only \texttt{canneal} on node~B while moving all other batch jobs to
@@ -690,7 +728,8 @@
          The cost of that limited first prompt was visible in the evaluation:
          compared with the seed, the score dropped from 9777 to 9714 and
          makespan increased from \(223\) to \(286\,\mathrm{s}\), even though SLO
-         violations stayed at zero. Subsequent candidates had a better signal
+         violations stayed at zero. Figure~\ref{fig:openevolve-iteration1-flaw}
+         shows this first generated candidate. Subsequent candidates had a better signal
          because OpenEvolve fed them \texttt{summary.json}, a compact version of
          the Kubernetes timing results from previous evaluations, so later
          prompts included concrete makespans and job timings instead of only the
@@ -701,6 +740,8 @@
             \includegraphics[width=0.92\linewidth]{figures/part3/cx_part3_q2b_openevolve_iteration1_flaw.png}
             \par\vspace{0.15em}
             {\small Iteration~1 generated candidate. The candidate kept SLO violations at zero, but its node-A chain made makespan much worse: \(286\,\mathrm{s}\) instead of \(223\,\mathrm{s}\) for the seed.\par}
+            \caption{Iteration~1 generated candidate with worse makespan despite zero SLO violations.}
+            \label{fig:openevolve-iteration1-flaw}
             \vspace{2em}
          \end{figure}
 
