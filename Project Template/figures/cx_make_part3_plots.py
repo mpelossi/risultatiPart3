@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import statistics
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,11 @@ FINAL_RUNS_DIR = RUNS_ROOT / "part3-PartA"
 AI_RUNS_DIR = RUNS_ROOT / "part3-PartB"
 HANDCRAFTED_RUNS_DIR = RUNS_ROOT / "part3-handcrafted"
 OUT_DIR = Path(__file__).resolve().parent / "part3"
+OPENEVOLVE_RUN_DIR = Path(
+    r"C:/Users/User/Desktop/ETH/MSc/1 Semester/CCA/risultatiPart3 WIN/Matte/part3_openEvolve/runs/run_20260505_154001"
+)
+OPENEVOLVE_CHECKPOINTS_DIR = OPENEVOLVE_RUN_DIR / "checkpoints"
+OPENEVOLVE_EVAL_RUNS_DIR = RUNS_ROOT / "part3-OPENEVOLVE"
 
 FINAL_RUN_IDS = [
     "2026-05-10-02h28m11s",
@@ -129,8 +135,8 @@ def load_jobs_from_results(runs_dir: Path, run_id: str) -> dict[str, dict[str, o
     return jobs
 
 
-def load_mcperf_samples(runs_dir: Path, run_id: str) -> list[dict[str, float]]:
-    path = runs_dir / run_id / "mcperf.txt"
+def load_mcperf_samples_from_run_dir(run_dir: Path) -> list[dict[str, float]]:
+    path = run_dir / "mcperf.txt"
     lines = path.read_text(encoding="utf-8").splitlines()
     header = lines[0].split()
     indexes = {name: i for i, name in enumerate(header)}
@@ -147,6 +153,260 @@ def load_mcperf_samples(runs_dir: Path, run_id: str) -> list[dict[str, float]]:
             }
         )
     return samples
+
+
+def load_mcperf_samples(runs_dir: Path, run_id: str) -> list[dict[str, float]]:
+    return load_mcperf_samples_from_run_dir(runs_dir / run_id)
+
+
+def _metric_value(payload: dict[str, object], key: str) -> float:
+    metrics = payload.get("metrics", {})
+    if not isinstance(metrics, dict) or key not in metrics:
+        raise ValueError(f"missing metric {key}")
+    return float(metrics[key])
+
+
+def _iteration_value(payload: dict[str, object]) -> int:
+    value = payload.get("iteration_found", payload.get("iteration"))
+    if value is None:
+        raise ValueError("missing iteration")
+    return int(value)
+
+
+def _run_id_from_artifacts(payload: dict[str, object]) -> str:
+    raw_artifacts = payload.get("artifacts_json")
+    if not isinstance(raw_artifacts, str) or not raw_artifacts:
+        return ""
+    try:
+        artifacts = json.loads(raw_artifacts)
+        summary = json.loads(artifacts.get("summary", "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return ""
+    run_id = summary.get("run_id", "")
+    return str(run_id) if run_id else ""
+
+
+def load_run_summary(run_dir: Path) -> dict[str, object]:
+    return json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+
+
+def summary_matches_point(summary: dict[str, object], point: dict[str, object]) -> bool:
+    return (
+        abs(float(summary.get("makespan_s", -1.0)) - float(point["makespan_s"])) < 0.01
+        and abs(float(summary.get("max_observed_p95_us", -1.0)) - float(point["max_p95_us"])) < 0.01
+        and float(summary.get("slo_violations", -1.0)) == float(point["slo_violations"])
+    )
+
+
+def find_openevolve_eval_run_dir(point: dict[str, object]) -> Path:
+    run_id = str(point.get("run_id") or "")
+    if run_id:
+        candidate = OPENEVOLVE_EVAL_RUNS_DIR / run_id
+        if (candidate / "summary.json").exists() and (candidate / "mcperf.txt").exists():
+            return candidate
+
+    for candidate in OPENEVOLVE_EVAL_RUNS_DIR.iterdir():
+        if not candidate.is_dir():
+            continue
+        summary_path = candidate / "summary.json"
+        if not summary_path.exists() or not (candidate / "mcperf.txt").exists():
+            continue
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        if run_id and summary.get("run_id") == run_id:
+            return candidate
+        if not run_id and summary_matches_point(summary, point):
+            return candidate
+
+    raise ValueError(f"could not find raw OpenEvolve run for iteration {point['iteration']}")
+
+
+def add_mcperf_p95_stats(point: dict[str, object]) -> None:
+    run_dir = find_openevolve_eval_run_dir(point)
+    summary = load_run_summary(run_dir)
+    jobs = summary.get("jobs", {})
+    if not isinstance(jobs, dict):
+        raise ValueError(f"{run_dir.name}: missing jobs in summary.json")
+
+    start_times = [parse_iso_seconds(str(info["started_at"])) for info in jobs.values()]
+    finish_times = [parse_iso_seconds(str(info["finished_at"])) for info in jobs.values()]
+    t0 = min(start_times)
+    t1 = max(finish_times)
+    p95_values_us = []
+    for sample in load_mcperf_samples_from_run_dir(run_dir):
+        start = max(sample["ts_start_s"], t0)
+        end = min(sample["ts_end_s"], t1)
+        if end <= start:
+            continue
+        p95_values_us.append(sample["p95_ms"] * 1000.0)
+
+    if not p95_values_us:
+        raise ValueError(f"{run_dir.name}: no mcperf samples overlap the batch window")
+    point["run_dir"] = run_dir.name
+    point["p95_mean_us"] = sum(p95_values_us) / len(p95_values_us)
+    point["p95_std_us"] = statistics.pstdev(p95_values_us)
+    point["p95_sample_count"] = len(p95_values_us)
+
+
+def load_openevolve_iterations() -> list[dict[str, object]]:
+    programs: dict[str, dict[str, object]] = {}
+    for path in OPENEVOLVE_CHECKPOINTS_DIR.glob("checkpoint_*/programs/*.json"):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        program_id = str(payload["id"])
+        iteration = _iteration_value(payload)
+        current = programs.get(program_id)
+        if current is not None and iteration >= int(current["iteration"]):
+            continue
+        programs[program_id] = {
+            "id": program_id,
+            "iteration": iteration,
+            "combined_score": _metric_value(payload, "combined_score"),
+            "makespan_s": _metric_value(payload, "makespan_s"),
+            "max_p95_us": _metric_value(payload, "max_p95_us"),
+            "slo_violations": _metric_value(payload, "slo_violations"),
+            "run_id": _run_id_from_artifacts(payload),
+        }
+
+    if not programs:
+        raise ValueError(f"no OpenEvolve program metadata found in {OPENEVOLVE_CHECKPOINTS_DIR}")
+    points = sorted(programs.values(), key=lambda item: int(item["iteration"]))
+    for point in points:
+        add_mcperf_p95_stats(point)
+    return points
+
+
+def configure_iteration_axis(ax, points: list[dict[str, object]]) -> None:
+    last_iteration = max(int(point["iteration"]) for point in points)
+    ticks = list(range(0, last_iteration + 1, 2))
+    if ticks[-1] != last_iteration:
+        ticks.append(last_iteration)
+    ax.set_xlim(-0.5, last_iteration + 0.5)
+    ax.set_xticks(ticks)
+    ax.set_xlabel("OpenEvolve iteration")
+    ax.grid(True, color="#e5e5e5", linewidth=0.7)
+
+
+def plot_openevolve_latency_and_makespan(points: list[dict[str, object]]) -> None:
+    iterations = [int(point["iteration"]) for point in points]
+    p95_values = [float(point["p95_mean_us"]) for point in points]
+    p95_std_values = [float(point["p95_std_us"]) for point in points]
+    makespan_values = [float(point["makespan_s"]) for point in points]
+
+    plt.rcParams.update(
+        {
+            "font.size": 10,
+            "axes.labelsize": 10,
+            "axes.titlesize": 11,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+        }
+    )
+    fig, latency_ax = plt.subplots(figsize=(8.8, 4.8))
+    makespan_ax = latency_ax.twinx()
+
+    p95_line = latency_ax.errorbar(
+        iterations,
+        p95_values,
+        yerr=p95_std_values,
+        color="#2f5f8f",
+        ecolor="#8ca8c2",
+        elinewidth=1.0,
+        capsize=3,
+        capthick=1.0,
+        fmt="-o",
+        markersize=4.5,
+        linewidth=1.8,
+        label="mean p95 latency +/- std dev",
+    )
+    makespan_line, = makespan_ax.plot(
+        iterations,
+        makespan_values,
+        color="#3d7b46",
+        marker="o",
+        markersize=4.5,
+        linewidth=1.8,
+        label="makespan",
+    )
+    slo_threshold = latency_ax.axhline(
+        1000.0,
+        color="#d62728",
+        linestyle=(0, (5, 5)),
+        linewidth=1.2,
+        label="1 ms SLO",
+    )
+
+    configure_iteration_axis(latency_ax, points)
+    latency_ax.set_ylabel("p95 latency mean +/- std dev [us]", color="#2f5f8f")
+    latency_ax.tick_params(axis="y", labelcolor="#2f5f8f")
+    latency_ax.set_ylim(0, max(1050.0, max(value + std for value, std in zip(p95_values, p95_std_values)) * 1.18))
+    makespan_ax.set_ylabel("makespan [s]", color="#3d7b46")
+    makespan_ax.tick_params(axis="y", labelcolor="#3d7b46")
+    latency_ax.set_title("OpenEvolve policy evaluations: latency variability and makespan")
+    latency_ax.legend(handles=[p95_line, makespan_line, slo_threshold], loc="upper right", bbox_to_anchor=(1.0, 0.95),frameon=False)
+    fig.tight_layout()
+
+    output = OUT_DIR / "cx_part3_q2a_openevolve_p95_makespan.png"
+    fig.savefig(output, dpi=220)
+    plt.close(fig)
+    print(f"wrote {output}")
+
+
+def plot_openevolve_slo_and_score(points: list[dict[str, object]]) -> None:
+    iterations = [int(point["iteration"]) for point in points]
+    slo_values = [float(point["slo_violations"]) for point in points]
+    score_values = [float(point["combined_score"]) for point in points]
+
+    plt.rcParams.update(
+        {
+            "font.size": 10,
+            "axes.labelsize": 10,
+            "axes.titlesize": 11,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+        }
+    )
+    fig, slo_ax = plt.subplots(figsize=(8.8, 4.8))
+    score_ax = slo_ax.twinx()
+
+    slo_line, = slo_ax.plot(
+        iterations,
+        slo_values,
+        color="#c23b22",
+        marker="x",
+        markersize=5.0,
+        linewidth=1.8,
+        label="SLO violations",
+    )
+    score_line, = score_ax.plot(
+        iterations,
+        score_values,
+        color="#5d4a8d",
+        marker="s",
+        markersize=4.0,
+        linewidth=1.8,
+        label="combined score",
+    )
+
+    configure_iteration_axis(slo_ax, points)
+    slo_ax.set_ylabel("SLO violations [samples]", color="#c23b22")
+    slo_ax.tick_params(axis="y", labelcolor="#c23b22")
+    slo_ax.set_ylim(0, max(1.0, max(slo_values) * 1.18))
+    slo_ax.set_yticks(range(0, int(slo_ax.get_ylim()[1]) + 1))
+    score_ax.set_ylabel("combined score", color="#5d4a8d")
+    score_ax.tick_params(axis="y", labelcolor="#5d4a8d")
+    slo_ax.set_title("OpenEvolve policy evaluations: SLO violations and score")
+    slo_ax.legend(handles=[slo_line, score_line], loc="upper right", frameon=False)
+    fig.tight_layout()
+
+    output = OUT_DIR / "cx_part3_q2a_openevolve_slo_score.png"
+    fig.savefig(output, dpi=220)
+    plt.close(fig)
+    print(f"wrote {output}")
+
+
+def plot_openevolve_iterations() -> None:
+    points = load_openevolve_iterations()
+    plot_openevolve_latency_and_makespan(points)
+    plot_openevolve_slo_and_score(points)
 
 
 def text_color(background: str) -> str:
@@ -262,7 +522,7 @@ def draw_node_axis(
         y_offset = 0.0
         
         if (len(cores))%2 == 0:
-            print("even cores, applying offset" , max(cores))
+            # print("even cores, applying offset" , max(cores))
             y_offset = 0.5
             
         y_center = (y_by_core[core_list[0]] + y_by_core[core_list[-1]]) / 2.0 + (- y_offset) 
@@ -461,6 +721,8 @@ def main() -> None:
             job_cores=AI_JOB_CORES,
             annotate_details=True,
         )
+
+    plot_openevolve_iterations()
 
 
 if __name__ == "__main__":

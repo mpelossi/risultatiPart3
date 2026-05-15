@@ -478,9 +478,32 @@
     \item Create two line plots (one for the p95 latency and one for SLO violations) showing policy performance over iterations.
     
     \textbf{Answer:}
+    We ran OpenEvolve for 20 iterations, starting from the baseline policy at
+    iteration~0. The first plot shows the memcached p95 latency mean with
+    standard-deviation error bars, together with the measured makespan. The
+    second plot shows the SLO violation count together with the evaluator's
+    \texttt{combined\_score}. For passing policies, the score is
+    \(10000 - \mathrm{makespan} -
+    \max(0,\mathrm{max\_p95\_us}-850)/10\), so in these evaluations it mostly
+    tracks \(10000-\mathrm{makespan}\), because every p95 value stayed well
+    below \(850\,\mu\mathrm{s}\). Across the saved evaluations, memcached
+    stayed comfortably below the \(1\,\mathrm{ms}\) p95 SLO and the measured
+    SLO violation count remained zero.
+
+    \begin{figure}[H]
+        \centering
+        \hspace*{-0.5cm}\includegraphics[width=1.1\linewidth]{figures/part3/cx_part3_q2a_openevolve_p95_makespan.png}
+        \par\vspace{0.15em}
+        {\small Mean memcached p95 latency with standard-deviation error bars, and makespan, for each saved OpenEvolve policy evaluation. The red dashed line marks the \(1\,\mathrm{ms}\) SLO.\par}
+
+        \vspace{1em}
+
+        \includegraphics[width=1.1\linewidth]{figures/part3/cx_part3_q2a_openevolve_slo_score.png}
+        \par\vspace{0.15em}
+        {\small SLO violation count and \texttt{combined\_score} for each saved OpenEvolve policy evaluation. Higher score corresponds mainly to lower makespan because none of these candidates incurred a p95 penalty.\par}
+        \vspace{2em}
+    \end{figure}
     \end{itemize}
-TODO TODO TODO     
-TODO TODO TODO
     % QUESTION b
     \item \textbf{[17 points]} Analysis of the Evolutionary Process: Describe the process of how you used OpenEvolve to design the AI-generated policy. For example, you can include the following details in your answer (You are not limited to these questions. You can include any other details you find relevant and interesting). Your response will be graded based on the thoroughness of the exploration and clarity in explanation:
         
